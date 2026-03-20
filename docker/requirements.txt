@@ -16,7 +16,6 @@ mpi4py==4.0.2
 natsort==8.4.0
 nvidia-eff==0.6.6
 nvidia-eff-tao-encryption==0.1.9
-nvidia-pyindex==1.0.9
 onnx==1.17.0
 onnxruntime==1.20.1
 opencv-python==4.11.0.86
@@ -35,3 +34,6 @@ scikit-image==0.25.1
 scikit-learn==1.6.1
 seaborn==0.13.2
 shapely==2.0.7
+transformers<5.0.0
+# Security
+Pillow==12.1.1

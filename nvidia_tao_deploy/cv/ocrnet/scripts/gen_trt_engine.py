@@ -21,6 +21,7 @@ from nvidia_tao_core.config.ocrnet.default_config import ExperimentConfig
 
 from nvidia_tao_deploy.cv.common.decorators import monitor_status
 from nvidia_tao_deploy.cv.common.initialize_experiments import initialize_gen_trt_engine_experiment
+from nvidia_tao_deploy.cv.common.utils import is_qdq_quantized_onnx
 from nvidia_tao_deploy.cv.ocrnet.engine_builder import OCRNetEngineBuilder
 from nvidia_tao_deploy.cv.common.hydra.hydra_runner import hydra_runner
 from nvidia_tao_deploy.utils.decoding import decode_model
@@ -46,8 +47,16 @@ def main(cfg: ExperimentConfig) -> None:
 
     workspace_size = cfg.gen_trt_engine.tensorrt.workspace_size
 
+    # Detect if the ONNX model is quantized
+    strongly_typed = False
+    if file_format == "onnx":
+        strongly_typed = is_qdq_quantized_onnx(tmp_onnx_file)
+        if strongly_typed:
+            logger.info("QDQ quantized ONNX model detected. Enabling strongly typed mode.")
+
     builder = OCRNetEngineBuilder(**engine_builder_kwargs,
-                                  workspace=workspace_size)
+                                  workspace=workspace_size,
+                                  strongly_typed=strongly_typed)
     builder.create_network(tmp_onnx_file, file_format)
     builder.create_engine(**create_engine_kwargs)
 

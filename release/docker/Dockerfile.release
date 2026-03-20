@@ -1,7 +1,7 @@
 # Select base image based on architecture
 ARG TARGETARCH # provided by Docker if using BuildKit. Else pass in explicitly.
-ARG ARM64_DIGEST=24e21be38c928d241c54f7d2a0ec4d439e69780ff6e78d9af225e50dbabbb1ce
-ARG X86_DIGEST=3ab5028b6829386e77eef4f150e5080ccc0cbbcc3a92cf37cf63ccbb934605b5
+ARG ARM64_DIGEST=0142e7f47f9445d6a143c5812ac47c1d57ce8955b750cdf1601ff9f3a0edce4b
+ARG X86_DIGEST=0ee07743237629c6345ba7c5bca7d7cdfad2b40884d943e1d9a2ef1b4c827b39
 
 FROM nvcr.io/nvstaging/tao/tao_deploy_base_image@sha256:${ARM64_DIGEST} AS base-arm64
 FROM nvcr.io/nvstaging/tao/tao_deploy_base_image@sha256:${X86_DIGEST} AS base-amd64
