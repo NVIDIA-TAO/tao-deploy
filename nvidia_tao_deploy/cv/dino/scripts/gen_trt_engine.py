@@ -20,6 +20,7 @@ import os
 from nvidia_tao_core.config.dino.default_config import ExperimentConfig
 
 from nvidia_tao_deploy.cv.common.initialize_experiments import initialize_gen_trt_engine_experiment
+from nvidia_tao_deploy.cv.common.utils import is_qdq_quantized_onnx
 from nvidia_tao_deploy.cv.deformable_detr.engine_builder import DDETRDetEngineBuilder
 from nvidia_tao_deploy.cv.common.decorators import monitor_status
 from nvidia_tao_deploy.cv.common.hydra.hydra_runner import hydra_runner
@@ -54,9 +55,17 @@ def main(cfg: ExperimentConfig) -> None:
         logger.warning("Overriding workspace_size from {} to 20480 due to ViT's model size".format(workspace_size))
         workspace_size = 20480
 
+    # Detect if the ONNX model is quantized
+    strongly_typed = False
+    if file_format == "onnx":
+        strongly_typed = is_qdq_quantized_onnx(tmp_onnx_file)
+        if strongly_typed:
+            logger.info("QDQ quantized ONNX model detected. Enabling strongly typed mode.")
+
     builder = DDETRDetEngineBuilder(**engine_builder_kwargs,
                                     workspace=workspace_size // 1024,  # DINO config is not in GB
-                                    img_std=img_std)
+                                    img_std=img_std,
+                                    strongly_typed=strongly_typed)
 
     builder.create_network(tmp_onnx_file, file_format)
     builder.create_engine(**create_engine_kwargs)

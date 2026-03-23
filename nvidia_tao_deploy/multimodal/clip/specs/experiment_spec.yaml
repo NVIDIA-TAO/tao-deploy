@@ -1,0 +1,53 @@
+# CLIP TensorRT Deployment Configuration
+#
+# Unified configuration for all CLIP TRT deployment tasks:
+# - gen_trt_engine: Convert ONNX model to TensorRT engine
+# - evaluate: Run retrieval evaluation with TRT engine
+# - inference: Run inference with TRT engine
+
+results_dir: ???
+
+# =============================================================================
+# TensorRT Engine Generation
+# =============================================================================
+gen_trt_engine:
+  onnx_file: ???           # Path to ONNX model file
+  trt_engine: ???          # Output TensorRT engine path
+  batch_size: -1           # -1 for dynamic batch size
+  tensorrt:
+    workspace_size: 4096   # TRT workspace size in MB
+    data_type: fp16        # fp32 or fp16
+    min_batch_size: 1
+    opt_batch_size: 1
+    max_batch_size: 16
+
+# =============================================================================
+# Dataset Configuration (for evaluation)
+# =============================================================================
+dataset:
+  val:
+    datasets:
+    - image_dir: ???              # Directory containing images
+      caption_dir: ???            # Directory containing caption .txt files
+      caption_file_suffix: .txt
+      image_list_file: null       # Optional: text file listing image filenames
+    batch_size: 16
+    num_workers: 8
+
+# =============================================================================
+# Retrieval Evaluation
+# =============================================================================
+evaluate:
+  trt_engine: ???                 # Path to TensorRT engine (combined), or
+                                  # base path for separate engines:
+                                  #   {base}_vision.engine + {base}_text.engine
+  batch_size: 16
+
+# =============================================================================
+# Inference
+# =============================================================================
+inference:
+  trt_engine: ???                 # Same convention as evaluate.trt_engine
+  batch_size: 16
+  text_file: null                 # Text file with prompts for inference
+  datasets: []                    # Same format as dataset.val.datasets

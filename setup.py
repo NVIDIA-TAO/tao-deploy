@@ -25,7 +25,7 @@ PACKAGE_LIST = [
     "nvidia_tao_deploy"
 ]
 
-__python_version__ = "=={}.{}.*".format(sys.version_info.major, sys.version_info.minor)
+__python_version__ = ">=3.10"
 
 
 # Getting dependencies.
@@ -55,9 +55,9 @@ setuptools.setup(
         'License :: Other/Proprietary License',
         'Natural Language :: English',
         'Operating System :: POSIX :: Linux',
-        'Programming Language :: Python :: 3.6',
-        'Programming Language :: Python :: 3.7',
-        'Programming Language :: Python :: 3.8',
+        'Programming Language :: Python :: 3.10',
+        'Programming Language :: Python :: 3.11',
+        'Programming Language :: Python :: 3.12',
         'Topic :: Scientific/Engineering :: Artificial Intelligence',
     ],
     license=version_locals['__license__'],
@@ -108,6 +108,7 @@ setuptools.setup(
             'model_agnostic=nvidia_tao_deploy.cv.common.entrypoint.entrypoint_agnostic:main',
             'nvdinov2=nvidia_tao_deploy.cv.nvdinov2.entrypoint.nvdinov2:main',
             'mae=nvidia_tao_deploy.cv.mae.entrypoint.mae:main',
+            'clip=nvidia_tao_deploy.multimodal.clip.entrypoint.clip:main',
         ]
     }
 )
