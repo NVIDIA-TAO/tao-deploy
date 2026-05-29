@@ -1,16 +1,5 @@
-# Copyright (c) 2023, NVIDIA CORPORATION.  All rights reserved.
-#
-# Licensed under the Apache License, Version 2.0 (the "License");
-# you may not use this file except in compliance with the License.
-# You may obtain a copy of the License at
-#
-#     http://www.apache.org/licenses/LICENSE-2.0
-#
-# Unless required by applicable law or agreed to in writing, software
-# distributed under the License is distributed on an "AS IS" BASIS,
-# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-# See the License for the specific language governing permissions and
-# limitations under the License.
+# SPDX-FileCopyrightText: Copyright (c) 2026 NVIDIA CORPORATION & AFFILIATES. All rights reserved.
+# SPDX-License-Identifier: Apache-2.0
 
 """This script is responsible for generating default experiment.yaml files from dataclasses."""
 
@@ -25,6 +14,7 @@ from os.path import abspath, dirname, exists, join
 from omegaconf import MISSING, OmegaConf
 from dataclasses import dataclass
 
+import nvidia_tao_deploy
 from nvidia_tao_deploy.cv.common.hydra.hydra_runner import hydra_runner
 
 # Usage example:
@@ -36,69 +26,78 @@ python default_specs \
 """
 
 
-# Get the config root from tao-core
-try:
-    import nvidia_tao_core
-    TAO_CORE_ROOT = dirname(dirname(abspath(nvidia_tao_core.__file__)))
-    CONFIG_ROOT = join(TAO_CORE_ROOT, "nvidia_tao_core/config")
-except ImportError:
-    # Fallback: try to find tao-core relative to tao-deploy
-    # __file__ is in nvidia_tao_deploy/cv/common/utils/default_specs.py
-    # Need to go up 5 levels to get to tao-deploy root
-    TAO_DEPLOY_ROOT = dirname(dirname(dirname(dirname(dirname(abspath(__file__))))))
-    TAO_CORE_ROOT = join(dirname(TAO_DEPLOY_ROOT), "tao-core")
-    CONFIG_ROOT = join(TAO_CORE_ROOT, "nvidia_tao_core/config")
+# Resolve the config root from the in-tree nvidia_tao_deploy.config package.
+TAO_DEPLOY_PKG_ROOT = dirname(abspath(nvidia_tao_deploy.__file__))
+CONFIG_ROOT = join(TAO_DEPLOY_PKG_ROOT, "config")
+
+# Container directories under config/ and the deploy implementation tree that
+# group networks by family (e.g. config/multimodal/clip). The walk recurses one
+# level into these instead of treating them as networks themselves.
+_CONTAINER_DIRS = {"multimodal"}
+_SKIP_DIRS = {"utils", "__pycache__", "common"}
 
 
-def get_supported_modules():
-    """
-    Get list of supported modules from config directory that are also implemented in nvidia_tao_deploy.
+def get_supported_module_paths():
+    """Discover supported networks and their dotted subpaths under config/.
 
-    This function checks both:
-    1. Modules defined in nvidia_tao_core/config/
-    2. Modules actually implemented in nvidia_tao_deploy/cv
+    A network is "supported" when it has both:
+      1. A config package at nvidia_tao_deploy/config/<...>/
+      2. A deploy implementation with an entrypoint/ dir at
+         nvidia_tao_deploy/{cv,multimodal}/<network>/
 
     Returns:
-        List[str]: List of module names that have both config definitions and deploy implementations
+        Dict[str, str]: Map from short network name (e.g. "clip") to its
+        dotted subpath under nvidia_tao_deploy.config (e.g. "multimodal.clip").
     """
     if not exists(CONFIG_ROOT):
         logging.warning("Config root not found at %s", CONFIG_ROOT)
-        return []
+        return {}
 
-    # Get all config modules from tao-core
-    config_modules = [
-        item for item in listdir(CONFIG_ROOT)
-        if item not in ["utils", "__pycache__", "common"] and os.path.isdir(join(CONFIG_ROOT, item))
-    ]
+    # Walk config/ — flat entries become {name: name}; entries inside a known
+    # container dir become {name: "<container>.<name>"}.
+    config_paths = {}
+    for entry in listdir(CONFIG_ROOT):
+        entry_path = join(CONFIG_ROOT, entry)
+        if not os.path.isdir(entry_path) or entry in _SKIP_DIRS:
+            continue
+        if entry in _CONTAINER_DIRS:
+            for sub in listdir(entry_path):
+                sub_path = join(entry_path, sub)
+                if os.path.isdir(sub_path) and sub not in _SKIP_DIRS:
+                    config_paths[sub] = f"{entry}.{sub}"
+        else:
+            config_paths[entry] = entry
 
-    # Get TAO Deploy path from current file location without importing
-    # __file__ is in nvidia_tao_deploy/cv/common/utils/default_specs.py
-    # Go up 4 levels to get to nvidia_tao_deploy/, then get cv directory
+    # Find deploy implementations with an entrypoint/ — search both cv/ and
+    # the same container dirs (e.g. multimodal/) used on the config side.
     nvidia_tao_deploy_dir = dirname(dirname(dirname(dirname(abspath(__file__)))))
-    cv_dir = join(nvidia_tao_deploy_dir, "cv")
-
-    # Get all implemented modules from tao-deploy (directories with entrypoints in cv/)
     deploy_modules = set()
-    if exists(cv_dir):
-        for item in listdir(cv_dir):
-            item_path = join(cv_dir, item)
-            if os.path.isdir(item_path) and item not in ["__pycache__", "common"]:
-                # Check if it has an entrypoint (indicates it's a network module)
-                entrypoint_path = join(item_path, "entrypoint")
-                if exists(entrypoint_path):
-                    deploy_modules.add(item)
+    for impl_root in ("cv", *_CONTAINER_DIRS):
+        impl_dir = join(nvidia_tao_deploy_dir, impl_root)
+        if not exists(impl_dir):
+            continue
+        for item in listdir(impl_dir):
+            item_path = join(impl_dir, item)
+            if not os.path.isdir(item_path) or item in _SKIP_DIRS:
+                continue
+            if exists(join(item_path, "entrypoint")):
+                deploy_modules.add(item)
 
-    # Return only modules that exist in both places
-    supported = [module for module in config_modules if module in deploy_modules]
+    supported = {name: path for name, path in config_paths.items() if name in deploy_modules}
 
     if not supported:
         logging.warning(
             "No matching modules found between config (%d modules) "
             "and deploy implementation (%d modules)",
-            len(config_modules), len(deploy_modules)
+            len(config_paths), len(deploy_modules)
         )
 
-    return sorted(supported)
+    return supported
+
+
+def get_supported_modules():
+    """Return the sorted list of supported network short names."""
+    return sorted(get_supported_module_paths())
 
 
 def import_module_from_path(module_name):
@@ -106,7 +105,7 @@ def import_module_from_path(module_name):
     Import a module from its full path.
 
     Args:
-        module_name (str): Full module path (e.g., 'nvidia_tao_core.config.classification_tf2.default_config')
+        module_name (str): Full module path (e.g., 'nvidia_tao_deploy.config.classification_tf2.default_config')
 
     Returns:
         module: The imported module
@@ -162,10 +161,10 @@ def main(cfg: DefaultConfig) -> None:
     logging.info("Generating default spec for module: %s", cfg.module_name)
 
     # Validate module name
-    supported_modules = get_supported_modules()
-    if cfg.module_name not in supported_modules:
+    supported_module_paths = get_supported_module_paths()
+    if cfg.module_name not in supported_module_paths:
         error_msg = (f"Module '{cfg.module_name}' is not supported.\n"
-                     f"Supported modules: {', '.join(supported_modules)}")
+                     f"Supported modules: {', '.join(sorted(supported_module_paths))}")
         logging.error(error_msg)
         raise ValueError(error_msg)
 
@@ -181,7 +180,7 @@ def main(cfg: DefaultConfig) -> None:
         logging.warning("Output file already exists and will be overwritten: %s", output_path)
 
     # Import the module and get the ExperimentConfig dataclass
-    module_path = f"nvidia_tao_core.config.{cfg.module_name}.default_config"
+    module_path = f"nvidia_tao_deploy.config.{supported_module_paths[cfg.module_name]}.default_config"
     try:
         imported_module = import_module_from_path(module_path)
         if not hasattr(imported_module, 'ExperimentConfig'):

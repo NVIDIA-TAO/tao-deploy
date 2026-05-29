@@ -1,0 +1,63 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="980" height="430" viewBox="0 0 980 430" role="img" aria-labelledby="title desc">
+  <title id="title">TAO Deploy source runtime flow</title>
+  <desc id="desc">A diagram showing console scripts dispatching through entrypoints, scripts, configs, TensorRT builders, inferencers, metrics, and results.</desc>
+  <defs>
+    <marker id="arrow" markerWidth="10" markerHeight="10" refX="8" refY="3" orient="auto" markerUnits="strokeWidth">
+      <path d="M0,0 L0,6 L9,3 z" fill="#4a5568" />
+    </marker>
+    <style>
+      .box { fill: #f8fafc; stroke: #334155; stroke-width: 1.5; rx: 6; }
+      .accent { fill: #ecfeff; stroke: #0f766e; stroke-width: 1.5; rx: 6; }
+      .runtime { fill: #fff7ed; stroke: #c2410c; stroke-width: 1.5; rx: 6; }
+      .text { font: 14px sans-serif; fill: #0f172a; }
+      .small { font: 12px sans-serif; fill: #334155; }
+      .arrow { stroke: #4a5568; stroke-width: 1.7; fill: none; marker-end: url(#arrow); }
+    </style>
+  </defs>
+
+  <rect class="box" x="30" y="42" width="150" height="72" />
+  <text class="text" x="105" y="72" text-anchor="middle">setup.py</text>
+  <text class="small" x="105" y="92" text-anchor="middle">console_scripts</text>
+
+  <rect class="box" x="245" y="42" width="170" height="72" />
+  <text class="text" x="330" y="70" text-anchor="middle">model entrypoint</text>
+  <text class="small" x="330" y="91" text-anchor="middle">Hydra or proto</text>
+
+  <rect class="accent" x="480" y="42" width="175" height="72" />
+  <text class="text" x="567.5" y="70" text-anchor="middle">scripts package</text>
+  <text class="small" x="567.5" y="91" text-anchor="middle">gen_trt_engine, inference</text>
+
+  <rect class="box" x="725" y="42" width="190" height="72" />
+  <text class="text" x="820" y="70" text-anchor="middle">specs and config</text>
+  <text class="small" x="820" y="91" text-anchor="middle">YAML, dataclasses, proto</text>
+
+  <rect class="runtime" x="155" y="198" width="170" height="82" />
+  <text class="text" x="240" y="228" text-anchor="middle">decode model</text>
+  <text class="small" x="240" y="249" text-anchor="middle">ETLT, ONNX, UFF</text>
+
+  <rect class="runtime" x="405" y="198" width="190" height="82" />
+  <text class="text" x="500" y="228" text-anchor="middle">EngineBuilder</text>
+  <text class="small" x="500" y="249" text-anchor="middle">network, calibration, engine</text>
+
+  <rect class="runtime" x="675" y="198" width="190" height="82" />
+  <text class="text" x="770" y="228" text-anchor="middle">TRTInferencer</text>
+  <text class="small" x="770" y="249" text-anchor="middle">bindings, batches, outputs</text>
+
+  <rect class="box" x="265" y="340" width="190" height="58" />
+  <text class="text" x="360" y="366" text-anchor="middle">dataloaders</text>
+  <text class="small" x="360" y="384" text-anchor="middle">images, KITTI, COCO</text>
+
+  <rect class="box" x="525" y="340" width="190" height="58" />
+  <text class="text" x="620" y="366" text-anchor="middle">metrics and results</text>
+  <text class="small" x="620" y="384" text-anchor="middle">labels, images, scores</text>
+
+  <path class="arrow" d="M180 78 H245" />
+  <path class="arrow" d="M415 78 H480" />
+  <path class="arrow" d="M655 78 H725" />
+  <path class="arrow" d="M568 114 V154 C568 174 500 174 500 198" />
+  <path class="arrow" d="M480 114 C410 140 310 154 260 198" />
+  <path class="arrow" d="M325 239 H405" />
+  <path class="arrow" d="M595 239 H675" />
+  <path class="arrow" d="M360 340 C380 310 430 290 480 280" />
+  <path class="arrow" d="M770 280 C750 320 700 337 620 340" />
+</svg>

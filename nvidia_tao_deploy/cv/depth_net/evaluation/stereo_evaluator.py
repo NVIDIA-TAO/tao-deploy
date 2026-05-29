@@ -1,21 +1,11 @@
-# Copyright (c) 2025, NVIDIA CORPORATION.  All rights reserved.
-#
-# Licensed under the Apache License, Version 2.0 (the "License");
-# you may not use this file except in compliance with the License.
-# You may obtain a copy of the License at
-#
-#     http://www.apache.org/licenses/LICENSE-2.0
-#
-# Unless required by applicable law or agreed to in writing, software
-# distributed under the License is distributed on an "AS IS" BASIS,
-# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-# See the License for the specific language governing permissions and
-# limitations under the License.
+# SPDX-FileCopyrightText: Copyright (c) 2026 NVIDIA CORPORATION & AFFILIATES. All rights reserved.
+# SPDX-License-Identifier: Apache-2.0
 
 """ Depth Net Evaluator in distributed mode. """
 
 from typing import Tuple, List, Dict
 
+import cv2
 import numpy as np
 from numpy import ndarray
 
@@ -203,6 +193,61 @@ class StereoDepthEvaluator:
 
         self.total = 0
         self.kwargs = kwargs
+
+    @classmethod
+    def from_cfg(cls, cfg, sync_on_compute: bool = False) -> "StereoDepthEvaluator":
+        """Build a StereoDepthEvaluator from the deploy spec config.
+
+        ``max_disparity`` is currently fixed at 416 to match the
+        FoundationStereo model's effective disparity range.
+        """
+        return cls(max_disparity=416, sync_on_compute=sync_on_compute)
+
+    def prepare_sample(
+        self,
+        pred_depth: ndarray,
+        gt_depth: ndarray,
+        new_h: int,
+        new_w: int,
+        orig_h: int,
+        orig_w: int,
+    ) -> Dict:
+        """Prepare a single sample for ``update`` at engine resolution.
+
+        GT is resized from ``(orig_h, orig_w)`` to ``(new_h, new_w)`` and
+        disparity values rescaled by ``new_w / orig_w``. Returns a dict
+        with ``sample_dict`` (consumed by ``update``) and ``per_sample``
+        (per-sample EPE + ``orig_hw`` / ``engine_hw``).
+        """
+        gt_engine_loc = cv2.resize(
+            gt_depth, (new_w, new_h), interpolation=cv2.INTER_LINEAR
+        )
+        gt_engine = gt_engine_loc * (float(new_w) / float(orig_w))
+        valid_mask = (gt_engine > 0.) & np.isfinite(gt_engine)
+
+        mask_ps = (
+            (gt_engine > 0.) &
+            (gt_engine < self.max_disparity) &
+            np.isfinite(gt_engine)
+        )
+        epe_ps = (
+            float(np.mean(np.abs(pred_depth - gt_engine)[mask_ps]))
+            if mask_ps.any()
+            else float('nan')
+        )
+
+        return {
+            "sample_dict": {
+                "depth_pred": pred_depth[None, ...],
+                "disp_gt": gt_engine[None, ...],
+                "valid_mask": valid_mask[None, ...],
+            },
+            "per_sample": {
+                "epe": epe_ps,
+                "orig_hw": [orig_h, orig_w],
+                "engine_hw": [new_h, new_w],
+            },
+        }
 
     def update(self, post_processed_results: List[Dict]) -> None:
         """Updates the metric results for a stereo estimation model.

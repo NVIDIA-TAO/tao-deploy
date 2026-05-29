@@ -1,7 +1,10 @@
+# SPDX-FileCopyrightText: Copyright (c) 2026 NVIDIA CORPORATION & AFFILIATES. All rights reserved.
+# SPDX-License-Identifier: Apache-2.0
+
 ARG FROM_SCRIPTS_IMAGE=gitlab-master.nvidia.com:5005/dl/devops/build-scripts:latest
 FROM ${FROM_SCRIPTS_IMAGE} AS build-scripts
 
-FROM nvcr.io/nvidia/tensorrt:25.09-py3
+FROM nvcr.io/nvidia/tensorrt:26.03-py3
 
 RUN apt-get update && \
     apt-get install -y pkg-config && \
@@ -24,7 +27,6 @@ RUN pip install -r requirements-dev.txt && \
 COPY docker/requirements-apt.txt /workspace/
 RUN apt-get update && apt-get install --no-install-suggests --no-install-recommends --yes $(cat /workspace/requirements-apt.txt)
 RUN rm -rf /workspace/requirements-apt.txt
-
 
 # Create user that will run commands
 ARG user_id=1000
