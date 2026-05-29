@@ -1,16 +1,5 @@
-# Copyright (c) 2023, NVIDIA CORPORATION.  All rights reserved.
-#
-# Licensed under the Apache License, Version 2.0 (the "License");
-# you may not use this file except in compliance with the License.
-# You may obtain a copy of the License at
-#
-#     http://www.apache.org/licenses/LICENSE-2.0
-#
-# Unless required by applicable law or agreed to in writing, software
-# distributed under the License is distributed on an "AS IS" BASIS,
-# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-# See the License for the specific language governing permissions and
-# limitations under the License.
+# SPDX-FileCopyrightText: Copyright (c) 2026 NVIDIA CORPORATION & AFFILIATES. All rights reserved.
+# SPDX-License-Identifier: Apache-2.0
 
 """DepthNet data loader based on annotation file lists.
 
@@ -137,13 +126,19 @@ class DepthNetDataLoader:
         self.img_std = img_std
         self.img_mean = img_mean
         self.evaluation = evaluation
+        # First-source dataset_name; consumed by eval_crop_box.
+        self._dataset_name = (
+            data_sources[0].get("dataset_name", "") if data_sources else ""
+        )
 
         left_list: List[str] = []
         right_list: List[str] = []
         gt_list: List[str] = []
+        nocc_list: List[str] = []
 
         for data_source in data_sources:
             data_file = data_source.get("data_file")
+            dataset_name = data_source.get("dataset_name", "")
             if data_file is None:
                 continue
             if not os.path.exists(data_file):
@@ -158,26 +153,38 @@ class DepthNetDataLoader:
                         # mono, no GT
                         left_list.append(parts[0])
                     elif len(parts) == 2:
-                        # mono with GT OR stereo without GT
-                        # Heuristic: if second token looks like an image extension, treat as stereo
-                        if os.path.splitext(parts[1])[1].lower() in (".jpg", ".jpeg", ".png", ".bmp"):
+                        # Mono families: second token is GT (extension may
+                        # match an image; e.g. NYU sync_depth_*.png).
+                        if dataset_name.startswith(("Mono", "NYUDV2", "RelativeMono")):
+                            left_list.append(parts[0])
+                            gt_list.append(parts[1])
+                        elif os.path.splitext(parts[1])[1].lower() in (".jpg", ".jpeg", ".png", ".bmp"):
                             left_list.append(parts[0])
                             right_list.append(parts[1])
                         else:
                             left_list.append(parts[0])
                             gt_list.append(parts[1])
                     elif len(parts) >= 3:
-                        # stereo with GT (ignore extra tokens)
+                        # stereo with GT; optional 4th token is a non-occluded mask (nocc PNG)
                         left_list.append(parts[0])
                         right_list.append(parts[1])
                         gt_list.append(parts[2])
+                        if len(parts) >= 4:
+                            nocc_list.append(parts[3])
+                        elif gt_list:
+                            nocc_list.append("")
                     else:
                         continue
+
+        # Pad nocc_list with empty strings if shorter than gt_list
+        while len(nocc_list) < len(gt_list):
+            nocc_list.append("")
 
         # Store lists
         self._left_list = left_list
         self._right_list = right_list
         self._gt_list = gt_list
+        self._nocc_list = nocc_list
 
         # Determine layout from shape
         assert len(shape) == 4
@@ -206,6 +213,26 @@ class DepthNetDataLoader:
             end = min(start + self.batch_size, self.num_images)
             self._batches.append(list(range(start, end)))
 
+    def eval_crop_box(self, gt_shape):
+        """Return ``(top, bottom, left, right)`` eval crop for this dataset,
+        or ``None`` for full-image evaluation. NYU-family uses the Eigen crop.
+        """
+        name_lc = (self._dataset_name or "").lower()
+        if name_lc.startswith(("nyudv2", "mono", "relativemono")):
+            h, w = gt_shape[:2]
+            if h >= 471 and w >= 601:
+                return (45, 471, 41, 601)
+        return None
+
+    def _load_gt(self, gt_path: str, nocc_path: str = "") -> np.ndarray:
+        """Load GT depth and apply non-occluded mask when provided."""
+        gt = read_gt_depth(gt_path)
+        if nocc_path and os.path.exists(nocc_path):
+            nocc = np.array(Image.open(nocc_path))
+            gt = gt.copy()
+            gt[nocc != 255] = np.inf
+        return gt
+
     def _preprocess_left(self, image_path: str):
         """Load and preprocess an image to the target network input format.
 
@@ -226,14 +253,14 @@ class DepthNetDataLoader:
         image = np.asarray(image, dtype=self.dtype)
         orig_h, orig_w = image.shape[:2]
         image, _ = resize(image, None, size=(self.height, self.width))
+        new_h, new_w = image.shape[:2]
         image = preprocess_input(
             image,
-            data_format='channels_first',
+            data_format='channels_last',
             img_mean=self.img_mean,
             img_std=self.img_std,
             mode='torch',
         )
-        new_h, new_w = image.shape[:2]
         scale = (orig_h / new_h, orig_w / new_w)
         if self.channels_first and self.channel != 1:
             image = np.transpose(image, (2, 0, 1))
@@ -275,7 +302,8 @@ class DepthNetDataLoader:
                     batch_scales[i] = scale
                     batch_left_paths.append(self._left_list[idx])
                     if self.evaluation and len(self._gt_list) > 0:
-                        batch_gt.append(read_gt_depth(self._gt_list[idx]))
+                        _nocc = self._nocc_list[idx] if self._nocc_list else ""
+                        batch_gt.append(self._load_gt(self._gt_list[idx], _nocc))
                 if self.evaluation and len(self._gt_list) > 0:
                     yield batch_data, batch_left_paths, batch_scales, np.array(batch_gt)
                 else:

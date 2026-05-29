@@ -1,16 +1,5 @@
-# Copyright (c) 2023, NVIDIA CORPORATION.  All rights reserved.
-#
-# Licensed under the Apache License, Version 2.0 (the "License");
-# you may not use this file except in compliance with the License.
-# You may obtain a copy of the License at
-#
-#     http://www.apache.org/licenses/LICENSE-2.0
-#
-# Unless required by applicable law or agreed to in writing, software
-# distributed under the License is distributed on an "AS IS" BASIS,
-# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-# See the License for the specific language governing permissions and
-# limitations under the License.
+# SPDX-FileCopyrightText: Copyright (c) 2026 NVIDIA CORPORATION & AFFILIATES. All rights reserved.
+# SPDX-License-Identifier: Apache-2.0
 
 """Base TensorRT engine builder."""
 
@@ -35,6 +24,7 @@ TRT_8_API = LEGACY_API_MODE()
 precision_mapping = {
     'fp32': trt.float32,
     'fp16': trt.float16,
+    'bf16': trt.bfloat16,
     'int32': trt.int32,
     'int8': trt.int8,
 }
@@ -67,7 +57,13 @@ class EngineBuilder(ABC):
                  force_ptq=False,
                  is_qat=False,
                  timing_cache_path=None,
-                 strongly_typed=False):
+                 strongly_typed=False,
+                 min_height=None,
+                 opt_height=None,
+                 max_height=None,
+                 min_width=None,
+                 opt_width=None,
+                 max_width=None):
         """Create a TensorRT engine.
 
         Parameters
@@ -116,6 +112,9 @@ class EngineBuilder(ABC):
 
         self.batch_size = batch_size
         self.max_batch_size, self.opt_batch_size, self.min_batch_size = max_batch_size, opt_batch_size, min_batch_size
+        # Optional dynamic H/W bounds (used when ONNX has -1 in dim 2/3).
+        self.min_height, self.opt_height, self.max_height = min_height, opt_height, max_height
+        self.min_width, self.opt_width, self.max_width = min_width, opt_width, max_width
         self.network = None
         self.parser = None
 
@@ -174,14 +173,47 @@ class EngineBuilder(ABC):
 
             logger.info("Network Description")
             opt_profile = self.builder.create_optimization_profile()
+
+            # When ONNX H/W dim is -1, pull min/opt/max from __init__ kwargs;
+            # otherwise reuse the ONNX dim for all three (static).
+            def _resolve_hw(onnx_dim, fallback_min, fallback_opt, fallback_max):
+                """Return ``(min, opt, max)`` for one H/W axis.
+
+                Args:
+                    onnx_dim (int): ONNX dim; ``-1`` if dynamic.
+                    fallback_min/opt/max (Optional[int]): Builder bounds,
+                        required when ``onnx_dim == -1``.
+
+                Returns:
+                    Tuple[int, int, int]: Profile triple for this axis.
+                """
+                if onnx_dim != -1:
+                    return onnx_dim, onnx_dim, onnx_dim
+                if (fallback_min is None) or (fallback_opt is None) or (fallback_max is None):
+                    raise ValueError(
+                        "ONNX has dynamic H/W axis but builder was not provided "
+                        "min/opt/max bounds. Pass min_height/opt_height/max_height "
+                        "(or width) to EngineBuilder.__init__."
+                    )
+                return int(fallback_min), int(fallback_opt), int(fallback_max)
+
             for model_input in inputs: # noqa pylint: disable=W0622
                 logger.info("Input '%s' with shape %s and dtype %s", model_input.name, model_input.shape, model_input.dtype)
                 input_shape = model_input.shape
                 input_name = model_input.name
+                # input_shape format: (B, C, H, W). Dim 0 is batch, dim 1 is
+                # channels (always static), dims 2/3 may be dynamic.
+                channels = input_shape[1]
+                h_min, h_opt, h_max = _resolve_hw(
+                    input_shape[2], self.min_height, self.opt_height, self.max_height
+                )
+                w_min, w_opt, w_max = _resolve_hw(
+                    input_shape[3], self.min_width, self.opt_width, self.max_width
+                )
                 if self.batch_size <= 0:
-                    real_shape_min = (self.min_batch_size, *input_shape[1:])
-                    real_shape_opt = (self.opt_batch_size, *input_shape[1:])
-                    real_shape_max = (self.max_batch_size, *input_shape[1:])
+                    real_shape_min = (self.min_batch_size, channels, h_min, w_min)
+                    real_shape_opt = (self.opt_batch_size, channels, h_opt, w_opt)
+                    real_shape_max = (self.max_batch_size, channels, h_max, w_max)
                     opt_profile.set_shape(
                         input=input_name,
                         min=real_shape_min,
@@ -189,12 +221,15 @@ class EngineBuilder(ABC):
                         max=real_shape_max
                     )
                 else:
-                    shape = (self.batch_size, *input_shape[1:])
+                    # Static-batch path: still honor dynamic H/W if provided.
+                    real_shape_min = (self.batch_size, channels, h_min, w_min)
+                    real_shape_opt = (self.batch_size, channels, h_opt, w_opt)
+                    real_shape_max = (self.batch_size, channels, h_max, w_max)
                     opt_profile.set_shape(
                         input=input_name,
-                        min=shape,
-                        opt=shape,
-                        max=shape
+                        min=real_shape_min,
+                        opt=real_shape_opt,
+                        max=real_shape_max
                     )
 
             self.config.add_optimization_profile(opt_profile)
@@ -465,6 +500,8 @@ class EngineBuilder(ABC):
                 logger.warning("FP16 is not supported natively on this platform/device")
             else:
                 self.config.set_flag(trt.BuilderFlag.FP16)
+        elif precision.lower() == "bf16":
+            self.config.set_flag(trt.BuilderFlag.BF16)
         elif precision.lower() == "int8":
             if not self.builder.platform_has_fast_int8:
                 logger.warning("INT8 is not supported natively on this platform/device")

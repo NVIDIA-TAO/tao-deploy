@@ -2,7 +2,7 @@
   "registry": "nvcr.io",
   "repository": "nvstaging/tao/tao_deploy_base_image",
   "digests": {
-    "x86": "sha256:0ee07743237629c6345ba7c5bca7d7cdfad2b40884d943e1d9a2ef1b4c827b39",
-    "arm": "sha256:0142e7f47f9445d6a143c5812ac47c1d57ce8955b750cdf1601ff9f3a0edce4b"
+    "x86": "sha256:67f7c9d16dd8c9c1b13388478766ed46080ad4787f540de03dfcffa5ef0fccee",
+    "arm": "sha256:33d1fc968e119fbba4dc3a5d4483fc4ed40425d3cecc818ec6ed5284300dbfef"
   }
 }

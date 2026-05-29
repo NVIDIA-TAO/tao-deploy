@@ -1,0 +1,9 @@
+repos:
+  - repo: local
+    hooks:
+      - id: update-docs-supported-commands
+        name: Update docs supported commands
+        entry: python3 tools/update_docs_supported_commands.py
+        language: system
+        pass_filenames: false
+        files: ^(setup\.py|tools/update_docs_supported_commands\.py|docs/supported_commands\.md|nvidia_tao_deploy/.+/(entrypoint|scripts)/.+\.py)$

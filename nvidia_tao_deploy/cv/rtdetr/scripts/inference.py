@@ -1,16 +1,5 @@
-# Copyright (c) 2023, NVIDIA CORPORATION.  All rights reserved.
-#
-# Licensed under the Apache License, Version 2.0 (the "License");
-# you may not use this file except in compliance with the License.
-# You may obtain a copy of the License at
-#
-#     http://www.apache.org/licenses/LICENSE-2.0
-#
-# Unless required by applicable law or agreed to in writing, software
-# distributed under the License is distributed on an "AS IS" BASIS,
-# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-# See the License for the specific language governing permissions and
-# limitations under the License.
+# SPDX-FileCopyrightText: Copyright (c) 2026 NVIDIA CORPORATION & AFFILIATES. All rights reserved.
+# SPDX-License-Identifier: Apache-2.0
 
 """Standalone TensorRT inference."""
 
@@ -21,7 +10,7 @@ from PIL import Image
 import tensorrt as trt
 from tqdm.auto import tqdm
 
-from nvidia_tao_core.config.rtdetr.default_config import ExperimentConfig
+from nvidia_tao_deploy.config.rtdetr.default_config import ExperimentConfig
 
 from nvidia_tao_deploy.cv.common.decorators import monitor_status
 from nvidia_tao_deploy.cv.deformable_detr.inferencer import DDETRInferencer
@@ -46,7 +35,7 @@ def main(cfg: ExperimentConfig) -> None:
     """RT-DETR TRT Inference.
 
     Args:
-        cfg (nvidia_tao_core.config.rtdetr.default_config.ExperimentConfig): Config schema to verify input config against.
+        cfg (nvidia_tao_deploy.config.rtdetr.default_config.ExperimentConfig): Config schema to verify input config against.
     """
     if not os.path.exists(cfg.inference.trt_engine):
         raise FileNotFoundError(f"Provided inference.trt_engine at {cfg.inference.trt_engine} does not exist!")

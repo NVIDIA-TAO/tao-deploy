@@ -1,7 +1,7 @@
 # Select base image based on architecture
 ARG TARGETARCH # provided by Docker if using BuildKit. Else pass in explicitly.
-ARG ARM64_DIGEST=0142e7f47f9445d6a143c5812ac47c1d57ce8955b750cdf1601ff9f3a0edce4b
-ARG X86_DIGEST=0ee07743237629c6345ba7c5bca7d7cdfad2b40884d943e1d9a2ef1b4c827b39
+ARG ARM64_DIGEST=33d1fc968e119fbba4dc3a5d4483fc4ed40425d3cecc818ec6ed5284300dbfef
+ARG X86_DIGEST=67f7c9d16dd8c9c1b13388478766ed46080ad4787f540de03dfcffa5ef0fccee
 
 FROM nvcr.io/nvstaging/tao/tao_deploy_base_image@sha256:${ARM64_DIGEST} AS base-arm64
 FROM nvcr.io/nvstaging/tao/tao_deploy_base_image@sha256:${X86_DIGEST} AS base-amd64
@@ -30,6 +30,13 @@ RUN cd tao-core && bash release/python/build_wheel.sh && \
     find dist/ -name "nvidia_tao_core*.whl" -type f | xargs -n 1 pip install && \
     cp nvidia_tao_core/microservices/nginx.conf /etc/nginx/ && \
     cd .. && rm -rf tao-core
+
+# NGC Security scan related fixes — Python package upgrades.
+# pydicom is pinned to 3.0.1 by tao-core's requirements; upgrade post-install
+# to remediate GHSA-v856-2rf8-9f28 (path traversal in FileSet/DICOMDIR).
+RUN python -m pip install --upgrade "pydicom>=3.0.2"
+# Note: the ffmpeg-in-opencv Critical fix has been moved to docker/Dockerfile (base image)
+# so both base and release scans are clean. See base Dockerfile for the rm block.
 
 # Installing the TAO Toolkit source code packages.
 WORKDIR /opt/nvidia

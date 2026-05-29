@@ -1,16 +1,5 @@
-# Copyright (c) 2023, NVIDIA CORPORATION.  All rights reserved.
-#
-# Licensed under the Apache License, Version 2.0 (the "License");
-# you may not use this file except in compliance with the License.
-# You may obtain a copy of the License at
-#
-#     http://www.apache.org/licenses/LICENSE-2.0
-#
-# Unless required by applicable law or agreed to in writing, software
-# distributed under the License is distributed on an "AS IS" BASIS,
-# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-# See the License for the specific language governing permissions and
-# limitations under the License.
+# SPDX-FileCopyrightText: Copyright (c) 2026 NVIDIA CORPORATION & AFFILIATES. All rights reserved.
+# SPDX-License-Identifier: Apache-2.0
 
 """Base utility functions for TensorRT inferencer."""
 
@@ -137,6 +126,25 @@ def allocate_buffers(engine, context=None, reshape=False, profile_idx: Optional[
     bindings = []
     stream = cuda.Stream()
 
+    # Dynamic engines: seed unset inputs with MAX profile shape so that
+    # output shapes resolve in the main loop below. Inputs whose shape was
+    # already narrowed by an earlier set_input_shape (e.g. via _setup_input)
+    # are left alone — overwriting them would break per-call batch narrowing
+    # used by static-batch and batch-only-dynamic networks.
+    if context is not None:
+        for _idx in range(engine.num_io_tensors):
+            _name = engine.get_tensor_name(_idx)
+            if engine.get_tensor_mode(_name) != trt.TensorIOMode.INPUT:
+                continue
+            _eng_shape = engine.get_tensor_shape(_name)
+            if not any(d < 0 for d in _eng_shape):
+                continue
+            _ctx_shape = context.get_tensor_shape(_name)
+            if any(d < 0 for d in _ctx_shape):
+                _prof = engine.get_tensor_profile_shape(_name, profile_idx or 0)
+                assert len(_prof) == 3, f"Bad profile {_prof}"
+                context.set_input_shape(_name, _prof[-1])  # MAX
+
     # Current NMS implementation in TRT only supports DataType.FLOAT but
     # it may change in the future, which could brake this sample here
     # when using lower precision [e.g. NMS output would not be np.float32
@@ -146,7 +154,8 @@ def allocate_buffers(engine, context=None, reshape=False, profile_idx: Optional[
         is_input = engine.get_tensor_mode(tensor_name) == trt.TensorIOMode.INPUT
         tensor_shape = engine.get_tensor_shape(tensor_name)
         if is_input:
-            if tensor_shape[0] < 0:
+            # Any dynamic axis → substitute MAX profile shape for alloc.
+            if any(d < 0 for d in tensor_shape):
                 profile_shape = engine.get_tensor_profile_shape(tensor_name, profile_idx)
                 assert len(profile_shape) == 3, (
                     "There should be min, opt and max shapes."

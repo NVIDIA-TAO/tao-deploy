@@ -1,16 +1,5 @@
-# Copyright (c) 2023, NVIDIA CORPORATION.  All rights reserved.
-#
-# Licensed under the Apache License, Version 2.0 (the "License");
-# you may not use this file except in compliance with the License.
-# You may obtain a copy of the License at
-#
-#     http://www.apache.org/licenses/LICENSE-2.0
-#
-# Unless required by applicable law or agreed to in writing, software
-# distributed under the License is distributed on an "AS IS" BASIS,
-# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-# See the License for the specific language governing permissions and
-# limitations under the License.
+# SPDX-FileCopyrightText: Copyright (c) 2026 NVIDIA CORPORATION & AFFILIATES. All rights reserved.
+# SPDX-License-Identifier: Apache-2.0
 
 """TensorRT Engine class for DepthNet inference.
 
@@ -19,10 +8,13 @@ inference for depth estimation models. It supports both monocular and stereo dep
 estimation with efficient batch processing capabilities.
 """
 
+import logging
+import numpy as np
+import tensorrt as trt
+
 from nvidia_tao_deploy.inferencer.trt_inferencer import TRTInferencer
 from nvidia_tao_deploy.inferencer.utils import do_inference
-import numpy as np
-import logging
+
 logger = logging.getLogger(__name__)
 
 
@@ -54,7 +46,11 @@ def trt_output_process(y_encoded):
         >>> depth_map = processed_outputs[0]  # First output is depth map
         >>> print(f"Depth map shape: {depth_map.shape}")
     """
-    return [np.reshape(out.host, out.numpy_shape) for out in y_encoded]
+    # Host buffer is MAX-sized; slice to runtime volume before reshape.
+    return [
+        np.reshape(out.host[:int(np.prod(out.numpy_shape))], out.numpy_shape)
+        for out in y_encoded
+    ]
 
 
 class DepthNetInferencer(TRTInferencer):
@@ -102,6 +98,30 @@ class DepthNetInferencer(TRTInferencer):
             ...     data_format="channel_first"
             ... )
         """
+        # Dynamic engine: pre-resolve MAX profile shape for buffer alloc.
+        if input_shape is None:
+            try:
+                _logger = trt.Logger(trt.Logger.WARNING)
+                _runtime = trt.Runtime(_logger)
+                with open(engine_path, 'rb') as _f:
+                    _engine = _runtime.deserialize_cuda_engine(_f.read())
+                _input_name = _engine.get_tensor_name(0)
+                _engine_shape = tuple(int(d) for d in _engine.get_tensor_shape(_input_name))
+                if any(d < 0 for d in _engine_shape):
+                    # Profile is (min, opt, max); index 2 = MAX.
+                    _profile_shape = _engine.get_tensor_profile_shape(_input_name, 0)
+                    input_shape = tuple(int(d) for d in _profile_shape[2])
+                    logger.info(
+                        "DepthNetInferencer: dynamic engine — using MAX shape %s.",
+                        input_shape,
+                    )
+                del _engine
+                del _runtime
+            except Exception as _e:
+                logger.warning(
+                    "DepthNetInferencer: dynamic-shape pre-resolve failed (%s).", _e,
+                )
+
         # Load TRT engine
         super().__init__(
             engine_path,
@@ -155,6 +175,14 @@ class DepthNetInferencer(TRTInferencer):
             # 1 input: [imgs] if imgs is not dict
             inputs = [imgs]
 
+        # Per-call shape binding for dynamic engines.
+        is_dynamic_engine = False
+        for img, tensor in zip(inputs, self.input_tensors):
+            if getattr(tensor, "optimization_profile", None) is not None:
+                is_dynamic_engine = True
+                actual = tuple(int(d) for d in img.shape)
+                self.context.set_input_shape(tensor.tensor_name, actual)
+
         # inputs is already a list from above
         self._copy_input_to_host(inputs)
 
@@ -166,6 +194,14 @@ class DepthNetInferencer(TRTInferencer):
             batch_size=self.max_batch_size,
             execute_v2=self.execute_async,
             return_raw=True)
+
+        # Output buffer is MAX-sized; refresh numpy_shape from live context.
+        if is_dynamic_engine:
+            for out in results:
+                runtime_shape = tuple(
+                    int(d) for d in self.context.get_tensor_shape(out.name)
+                )
+                out.numpy_shape = runtime_shape
 
         # Process TRT outputs to proper format
         results = trt_output_process(results)

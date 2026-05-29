@@ -1,0 +1,58 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="980" height="380" viewBox="0 0 980 380" role="img" aria-labelledby="title desc">
+  <title id="title">TAO Deploy container flow</title>
+  <desc id="desc">A diagram showing envsetup, tao_deploy, manifest digest selection, Docker run options, mounted source, and command execution inside the container.</desc>
+  <defs>
+    <marker id="arrow" markerWidth="10" markerHeight="10" refX="8" refY="3" orient="auto" markerUnits="strokeWidth">
+      <path d="M0,0 L0,6 L9,3 z" fill="#4a5568" />
+    </marker>
+    <style>
+      .box { fill: #f8fafc; stroke: #334155; stroke-width: 1.5; rx: 6; }
+      .manifest { fill: #eef2ff; stroke: #4338ca; stroke-width: 1.5; rx: 6; }
+      .container { fill: #ecfdf5; stroke: #047857; stroke-width: 1.5; rx: 6; }
+      .text { font: 14px sans-serif; fill: #0f172a; }
+      .small { font: 12px sans-serif; fill: #334155; }
+      .arrow { stroke: #4a5568; stroke-width: 1.7; fill: none; marker-end: url(#arrow); }
+    </style>
+  </defs>
+
+  <rect class="box" x="35" y="42" width="165" height="72" />
+  <text class="text" x="117.5" y="70" text-anchor="middle">scripts/envsetup.sh</text>
+  <text class="small" x="117.5" y="91" text-anchor="middle">NV_TAO_DEPLOY_TOP</text>
+
+  <rect class="box" x="275" y="42" width="165" height="72" />
+  <text class="text" x="357.5" y="70" text-anchor="middle">tao_deploy</text>
+  <text class="small" x="357.5" y="91" text-anchor="middle">runner/tao_deploy.py</text>
+
+  <rect class="manifest" x="520" y="42" width="190" height="72" />
+  <text class="text" x="615" y="70" text-anchor="middle">docker/manifest.json</text>
+  <text class="small" x="615" y="91" text-anchor="middle">x86 or ARM digest</text>
+
+  <rect class="container" x="785" y="42" width="160" height="72" />
+  <text class="text" x="865" y="70" text-anchor="middle">Docker image</text>
+  <text class="small" x="865" y="91" text-anchor="middle">pull or local tag</text>
+
+  <rect class="box" x="175" y="190" width="190" height="78" />
+  <text class="text" x="270" y="219" text-anchor="middle">run options</text>
+  <text class="small" x="270" y="240" text-anchor="middle">GPUs, shm, ulimits, UID</text>
+
+  <rect class="box" x="435" y="190" width="190" height="78" />
+  <text class="text" x="530" y="219" text-anchor="middle">mounts and env</text>
+  <text class="small" x="530" y="240" text-anchor="middle">source, data, PYTHONPATH</text>
+
+  <rect class="container" x="695" y="190" width="200" height="78" />
+  <text class="text" x="795" y="219" text-anchor="middle">container command</text>
+  <text class="small" x="795" y="240" text-anchor="middle">shell or command after --</text>
+
+  <rect class="container" x="365" y="310" width="250" height="48" />
+  <text class="text" x="490" y="340" text-anchor="middle">/workspace/tao-deploy</text>
+
+  <path class="arrow" d="M200 78 H275" />
+  <path class="arrow" d="M440 78 H520" />
+  <path class="arrow" d="M710 78 H785" />
+  <path class="arrow" d="M357 114 C315 140 285 160 270 190" />
+  <path class="arrow" d="M615 114 C590 145 555 165 530 190" />
+  <path class="arrow" d="M865 114 C850 145 815 165 795 190" />
+  <path class="arrow" d="M365 229 H435" />
+  <path class="arrow" d="M625 229 H695" />
+  <path class="arrow" d="M530 268 V310" />
+</svg>

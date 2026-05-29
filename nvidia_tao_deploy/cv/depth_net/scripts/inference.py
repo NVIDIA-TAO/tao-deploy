@@ -1,16 +1,5 @@
-# Copyright (c) 2023, NVIDIA CORPORATION.  All rights reserved.
-#
-# Licensed under the Apache License, Version 2.0 (the "License");
-# you may not use this file except in compliance with the License.
-# You may obtain a copy of the License at
-#
-#     http://www.apache.org/licenses/LICENSE-2.0
-#
-# Unless required by applicable law or agreed to in writing, software
-# distributed under the License is distributed on an "AS IS" BASIS,
-# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-# See the License for the specific language governing permissions and
-# limitations under the License.
+# SPDX-FileCopyrightText: Copyright (c) 2026 NVIDIA CORPORATION & AFFILIATES. All rights reserved.
+# SPDX-License-Identifier: Apache-2.0
 
 """DepthNet TensorRT inference script.
 
@@ -29,10 +18,11 @@ The inference process includes:
 import os
 import logging
 import cv2
+import numpy as np
 import tensorrt as trt
 from tqdm.auto import tqdm
 
-from nvidia_tao_core.config.depth_net.default_config import ExperimentConfig
+from nvidia_tao_deploy.config.depth_net.default_config import ExperimentConfig
 
 from nvidia_tao_deploy.cv.depth_net.inferencer import DepthNetInferencer
 from nvidia_tao_deploy.cv.depth_net.utils import vis_disparity, check_batch_sizes
@@ -96,6 +86,19 @@ def main(cfg: ExperimentConfig) -> None:
                                    batch_size=cfg.dataset.infer_dataset.batch_size)
 
     c, h, w = trt_infer.input_tensors[0].shape
+    # Dynamic engine: override H/W from augmentation.crop_size.
+    is_dynamic_engine = any(
+        getattr(t, "optimization_profile", None) is not None
+        for t in trt_infer.input_tensors
+    )
+    if is_dynamic_engine:
+        try:
+            _aug = cfg.dataset.infer_dataset.augmentation
+            _cs = _aug.get("crop_size", None) if _aug is not None else None
+            if _cs is not None and len(_cs) == 2:
+                h, w = int(_cs[0]), int(_cs[1])
+        except Exception:
+            pass
 
     loader = DepthNetDataLoader(
         cfg.dataset.infer_dataset.data_sources,
@@ -123,9 +126,22 @@ def main(cfg: ExperimentConfig) -> None:
         for batch, scale, pred_depth, img_path in zip(left_images, scales, pred_depths, img_paths):
             _, new_h, new_w = batch.shape
             orig_h, orig_w = int(scale[0] * new_h), int(scale[1] * new_w)
-            pred_depth = cv2.resize(pred_depth, (orig_w, orig_h), interpolation=cv2.INTER_CUBIC)
-            pred_depth = vis_disparity(pred_depth, normalize_depth=False)
-            cv2.imwrite(os.path.join(output_annotate_root, os.path.basename(img_path)), pred_depth)
+            pred_depth_engine = pred_depth  # at engine resolution
+            pred_depth_resized = cv2.resize(pred_depth, (orig_w, orig_h), interpolation=cv2.INTER_CUBIC)
+            pred_depth_vis = vis_disparity(pred_depth_resized, normalize_depth=False)
+            # Use last two path components to keep filenames injective.
+            parts = img_path.replace("\\", "/").split("/")
+            fname = "_".join(parts[-2:]) if len(parts) >= 2 else parts[-1]
+            cv2.imwrite(os.path.join(output_annotate_root, fname), pred_depth_vis)
+            # Optional raw fp32 disparity save (engine resolution, pre-resize).
+            try:
+                save_raw_npy = bool(getattr(cfg.inference, 'save_raw_npy', False))
+            except Exception:
+                save_raw_npy = False
+            if save_raw_npy:
+                npy_name = os.path.splitext(fname)[0] + '.npy'
+                np.save(os.path.join(output_annotate_root, npy_name),
+                        pred_depth_engine.astype(np.float32))
 
     logging.info("Finished inference.")
 

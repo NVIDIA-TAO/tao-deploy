@@ -1,16 +1,5 @@
-# Copyright (c) 2023, NVIDIA CORPORATION.  All rights reserved.
-#
-# Licensed under the Apache License, Version 2.0 (the "License");
-# you may not use this file except in compliance with the License.
-# You may obtain a copy of the License at
-#
-#     http://www.apache.org/licenses/LICENSE-2.0
-#
-# Unless required by applicable law or agreed to in writing, software
-# distributed under the License is distributed on an "AS IS" BASIS,
-# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-# See the License for the specific language governing permissions and
-# limitations under the License.
+# SPDX-FileCopyrightText: Copyright (c) 2026 NVIDIA CORPORATION & AFFILIATES. All rights reserved.
+# SPDX-License-Identifier: Apache-2.0
 
 """Base TensorRT inferencer."""
 
@@ -117,14 +106,24 @@ class TRTInferencer(BaseInferencer):
             "data_format": self.data_format
         }
 
-        # Handling dynamic batch sizes.
+        # Any-axis dynamic check (TRT 10.x leaves only dynamic dims as -1).
         self.profile_idx = 0
-        if tensor_shape[0] < 0:
+        if any(d < 0 for d in tensor_shape):
             optimization_profile = self.engine.get_tensor_profile_shape(tensor_name, self.profile_idx)
             assert len(optimization_profile) == 3, "Invalid optimization profile."
             io_tensor_kwargs["optimization_profile"] = optimization_profile
 
-        io_tensor = InputTensor(tensor_name, tensor_shape, tensor_dtype, **io_tensor_kwargs)
+        # For dynamic H/W engines (axes 2/3 are -1) substitute the MAX
+        # profile shape so downstream host buffers see no -1 in inner dims.
+        # Leave the batch axis alone — InputTensor.max_batch_size already
+        # routes a -1 batch through the optimization profile.
+        effective_shape = list(tensor_shape)
+        if "optimization_profile" in io_tensor_kwargs:
+            profile_max = io_tensor_kwargs["optimization_profile"][2]
+            for i in range(1, len(effective_shape)):
+                if effective_shape[i] < 0:
+                    effective_shape[i] = int(profile_max[i])
+        io_tensor = InputTensor(tensor_name, tuple(effective_shape), tensor_dtype, **io_tensor_kwargs)
         self.input_tensors.append(io_tensor)
 
         self.max_batch_size = io_tensor.max_batch_size
@@ -181,10 +180,19 @@ class TRTInferencer(BaseInferencer):
                 )
             # numpy_array always has max_batch_size
             # (For static batch sizes, max_batch_size == actual_batch_size)
-            self.numpy_array[tensor_name][:actual_batch_size] = inputs[idx]
-            # ...copy them into appropriate place into memory...
-            # (self.inputs was returned earlier by allocate_buffers())
-            np.copyto(self.inputs[idx].host, self.numpy_array[tensor_name].ravel())
+            # Some inferencers pass a Python list of per-sample arrays; cast
+            # so the dynamic-H/W check below can read .shape / .size.
+            input_arr = np.asarray(inputs[idx])
+            buf_shape = self.numpy_array[tensor_name].shape
+            # Inner-dim mismatch (dynamic H/W) → tight C-order pack.
+            # Batch-only mismatch → preserve the original numpy_array path
+            # so per-call set_input_shape can narrow inputs cleanly.
+            if input_arr.shape[1:] != buf_shape[1:] and \
+                    input_arr.size <= self.inputs[idx].host.size:
+                np.copyto(self.inputs[idx].host[:input_arr.size], input_arr.ravel())
+            else:
+                self.numpy_array[tensor_name][:actual_batch_size] = input_arr
+                np.copyto(self.inputs[idx].host, self.numpy_array[tensor_name].ravel())
 
     @abstractmethod
     def infer(self, imgs, scales=None):

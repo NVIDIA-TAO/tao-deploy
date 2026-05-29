@@ -1,16 +1,5 @@
-# Copyright (c) 2023, NVIDIA CORPORATION.  All rights reserved.
-#
-# Licensed under the Apache License, Version 2.0 (the "License");
-# you may not use this file except in compliance with the License.
-# You may obtain a copy of the License at
-#
-#     http://www.apache.org/licenses/LICENSE-2.0
-#
-# Unless required by applicable law or agreed to in writing, software
-# distributed under the License is distributed on an "AS IS" BASIS,
-# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-# See the License for the specific language governing permissions and
-# limitations under the License.
+# SPDX-FileCopyrightText: Copyright (c) 2026 NVIDIA CORPORATION & AFFILIATES. All rights reserved.
+# SPDX-License-Identifier: Apache-2.0
 
 """DepthNet TensorRT evaluation script.
 
@@ -28,14 +17,12 @@ The evaluation process includes:
 
 import os
 import logging
-import cv2
-import numpy as np
 import tensorrt as trt
 import json
 from tqdm.auto import tqdm
 import operator
 
-from nvidia_tao_core.config.depth_net.default_config import ExperimentConfig
+from nvidia_tao_deploy.config.depth_net.default_config import ExperimentConfig
 
 from nvidia_tao_deploy.cv.depth_net.inferencer import DepthNetInferencer
 from nvidia_tao_deploy.cv.depth_net.evaluation import MonoDepthEvaluator, StereoDepthEvaluator
@@ -98,11 +85,26 @@ def main(cfg: ExperimentConfig) -> None:
                                    batch_size=cfg.dataset.test_dataset.batch_size)
 
     c, h, w = trt_infer.input_tensors[0].shape
+    # Dynamic engine: override H/W from augmentation.crop_size.
+    is_dynamic_engine = any(
+        getattr(t, "optimization_profile", None) is not None
+        for t in trt_infer.input_tensors
+    )
+    if is_dynamic_engine:
+        try:
+            _aug = cfg.dataset.test_dataset.augmentation
+            _cs = _aug.get("crop_size", None) if _aug is not None else None
+            if _cs is not None and len(_cs) == 2:
+                h, w = int(_cs[0]), int(_cs[1])
+        except Exception:
+            pass
     dataset_name = cfg.dataset.dataset_name
-    if dataset_name.lower() == "stereodataset":
-        evaluator = StereoDepthEvaluator(sync_on_compute=False, max_disparity=416)
+    is_stereo = dataset_name.lower() == "stereodataset"
+
+    if is_stereo:
+        evaluator = StereoDepthEvaluator.from_cfg(cfg)
     else:
-        evaluator = MonoDepthEvaluator(align_gt=True, sync_on_compute=False, min_depth=0.0001, max_depth=416)
+        evaluator = MonoDepthEvaluator.from_cfg(cfg)
 
     loader = DepthNetDataLoader(
         cfg.dataset.test_dataset.data_sources,
@@ -112,26 +114,39 @@ def main(cfg: ExperimentConfig) -> None:
         evaluation=True,
     )
 
-    # Create results directories by going through the batcher
+    per_sample_stereo = []
+
     for batches, img_paths, scales, gt_depths in tqdm(loader.get_batch(), total=loader.num_batches, desc="Producing predictions"):
         left_images, batches = check_batch_sizes(batches, img_paths)
 
         pred_depths = trt_infer.infer(batches)
 
-        # squeeze depth tensor to 3D for FoundationStereo (B, 1, H, W) -> (B, H, W)
+        # FoundationStereo emits (B, 1, H, W); squeeze to (B, H, W).
         if pred_depths.ndim == 4:
             pred_depths = pred_depths.squeeze(1)
 
         pred_dict = []
 
-        # post-processing to resize to original size and update the evaluator
-        for batch, scale, pred_depth, gt_depth in zip(left_images, scales, pred_depths, gt_depths):
-            valid_mask = np.ones(gt_depth.shape, dtype=bool)
+        for img_path, batch, scale, pred_depth, gt_depth in zip(img_paths, left_images, scales, pred_depths, gt_depths):
             _, new_h, new_w = batch.shape
             orig_h, orig_w = int(scale[0] * new_h), int(scale[1] * new_w)
-            # interpolate pred_depth to original size
-            pred_depth = cv2.resize(pred_depth, (orig_w, orig_h), interpolation=cv2.INTER_CUBIC)
-            pred_dict.append({"depth_pred": pred_depth, "disp_gt": gt_depth, "valid_mask": valid_mask})
+
+            if is_stereo:
+                result = evaluator.prepare_sample(
+                    pred_depth, gt_depth, new_h, new_w, orig_h, orig_w,
+                )
+                pred_dict.append(result["sample_dict"])
+                per_sample_stereo.append({
+                    "scene": os.path.basename(os.path.dirname(img_path)),
+                    "path": img_path,
+                    **result["per_sample"],
+                })
+            else:
+                pred_dict.append(evaluator.prepare_sample(  # pylint: disable=unexpected-keyword-arg
+                    pred_depth, gt_depth,
+                    eval_crop_box=loader.eval_crop_box(gt_depth.shape),
+                    orig_h=orig_h, orig_w=orig_w,
+                ))
         evaluator.update(pred_dict)
 
     # Computing the final evaluation metrics and store evaluation results into JSON
@@ -151,6 +166,12 @@ def main(cfg: ExperimentConfig) -> None:
 
     with open(os.path.join(cfg.results_dir, "results.json"), "w", encoding="utf-8") as f:
         json.dump(eval_results, f, indent=4)
+
+    if per_sample_stereo:
+        with open(os.path.join(cfg.results_dir, "per_sample_results.json"), "w", encoding="utf-8") as f:
+            json.dump(per_sample_stereo, f, indent=4)
+        logging.info("Per-sample stereo results saved.")
+
     logging.info("Finished Evaluation.")
 
 

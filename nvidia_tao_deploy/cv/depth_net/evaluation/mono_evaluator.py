@@ -1,16 +1,5 @@
-# Copyright (c) 2025, NVIDIA CORPORATION.  All rights reserved.
-#
-# Licensed under the Apache License, Version 2.0 (the "License");
-# you may not use this file except in compliance with the License.
-# You may obtain a copy of the License at
-#
-#     http://www.apache.org/licenses/LICENSE-2.0
-#
-# Unless required by applicable law or agreed to in writing, software
-# distributed under the License is distributed on an "AS IS" BASIS,
-# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-# See the License for the specific language governing permissions and
-# limitations under the License.
+# SPDX-FileCopyrightText: Copyright (c) 2026 NVIDIA CORPORATION & AFFILIATES. All rights reserved.
+# SPDX-License-Identifier: Apache-2.0
 
 """DepthNet evaluation metrics and utilities.
 
@@ -19,10 +8,22 @@ including various accuracy metrics and depth alignment utilities. It supports bo
 monocular and stereo depth estimation evaluation with industry-standard metrics.
 """
 
-from typing import Tuple, List, Dict
+from typing import Tuple, List, Dict, Optional
 
+import cv2
 import numpy as np
 from numpy import ndarray
+
+
+def _safe_get(node, key, default):
+    """Fetch ``key`` from a possibly partial OmegaConf/dict node, falling
+    back to ``default`` when the key is absent or access raises.
+    """
+    try:
+        v = node.get(key, None)
+        return default if v is None else v
+    except Exception:
+        return default
 
 
 def align_depth_least_square(
@@ -203,6 +204,76 @@ class MonoDepthEvaluator:
 
         self.total = 0
         self.total_imgs = 0
+
+    @classmethod
+    def from_cfg(cls, cfg, sync_on_compute: bool = False) -> "MonoDepthEvaluator":
+        """Build a MonoDepthEvaluator from the deploy spec config.
+
+        Reads ``min_depth`` / ``max_depth`` from ``cfg.dataset`` (defaults
+        1e-3 / 10.0). Sets ``align_gt`` when ``cfg.model.model_type`` or the
+        first source's ``dataset_name`` contains ``"relative"``.
+        """
+        gt_min = float(_safe_get(cfg.dataset, 'min_depth', 1e-3) or 1e-3)
+        gt_max = float(_safe_get(cfg.dataset, 'max_depth', 10.0) or 10.0)
+        try:
+            ds_name = (
+                cfg.dataset.test_dataset.data_sources[0].dataset_name or ""
+            ).lower()
+        except Exception:
+            ds_name = ""
+        model_type = (cfg.model.model_type or "").lower()
+        align_gt = ("relative" in model_type) or ("relative" in ds_name)
+        return cls(
+            align_gt=align_gt,
+            min_depth=gt_min,
+            max_depth=gt_max,
+            sync_on_compute=sync_on_compute,
+        )
+
+    def prepare_sample(
+        self,
+        pred_depth: ndarray,
+        gt_depth: ndarray,
+        eval_crop_box: Optional[Tuple[int, int, int, int]] = None,
+        orig_h: Optional[int] = None,
+        orig_w: Optional[int] = None,
+    ) -> Dict[str, ndarray]:
+        """Prepare a single sample for ``update``.
+
+        Resizes ``pred_depth`` from engine resolution to (``orig_h``, ``orig_w``)
+        when both are supplied, builds a ``valid_mask`` from the depth-range
+        bounds and the optional dataset-aware ``eval_crop_box``, and converts
+        GT depth to disparity (1/depth) when the evaluator is configured
+        for relative-variant alignment.
+        """
+        if orig_h is not None and orig_w is not None:
+            pred_depth = cv2.resize(
+                pred_depth, (orig_w, orig_h), interpolation=cv2.INTER_CUBIC
+            )
+
+        valid_mask = (
+            (gt_depth > self.min_depth) &
+            (gt_depth < self.max_depth) &
+            np.isfinite(gt_depth)
+        )
+        if eval_crop_box is not None:
+            top, bottom, left, right = eval_crop_box
+            crop_mask = np.zeros_like(valid_mask, dtype=bool)
+            crop_mask[top:bottom, left:right] = True
+            valid_mask = valid_mask & crop_mask
+
+        if self.align_gt:
+            gt_for_eval = np.zeros_like(gt_depth, dtype=np.float32)
+            _pos = gt_depth > 0
+            gt_for_eval[_pos] = 1.0 / gt_depth[_pos]
+        else:
+            gt_for_eval = gt_depth
+
+        return {
+            "depth_pred": pred_depth[None, ...],
+            "disp_gt": gt_for_eval[None, ...],
+            "valid_mask": valid_mask[None, ...],
+        }
 
     def update(self, post_processed_results: List[Dict]) -> None:
         """
