@@ -17,7 +17,13 @@ nvidia-eff==0.6.6
 nvidia-eff-tao-encryption==0.1.9
 onnx==1.21.0
 onnxruntime==1.25.1
-opencv-python==4.13.0.92
+# Must match the codec-hardened, source-built OpenCV in the base image
+# (WITH_FFMPEG=OFF, 4.12.0.88). The base wheel 4.13.0.92 is published binary-only and
+# bundles libav* (the royalty-bearing codecs) + needs libGL; pinning the wheel dependency
+# to 4.13.0.92 makes `pip install nvidia-tao-deploy` reinstall that stock wheel over the
+# hardened build, re-introducing the codecs and breaking cv2 import on CPU-only nodes.
+# Pinning to 4.12.0.88 leaves the base's source build in place ("already satisfied"). (TAO-2183 / FF-3)
+opencv-python==4.12.0.88
 pipreqs==0.5.0
 pyarmor==8.5.8  # 8.5.8 is version nvidia-eff wheels use
 pyclipper==1.4.0

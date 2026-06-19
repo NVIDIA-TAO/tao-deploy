@@ -162,7 +162,7 @@ class EngineBuilder(ABC):
             logger.info("Parsing ONNX model")
             # input_dims are a dict {name: shape}
             input_dims = self.get_onnx_input_dims(inputs)
-            batch_sizes = {v[0] for v in input_dims.values()}
+            batch_sizes = {v[0] for v in input_dims.values() if len(v) > 0}
             assert len(batch_sizes) == 1, (
                 "All tensors should have the same batch size."
             )
@@ -174,26 +174,34 @@ class EngineBuilder(ABC):
             logger.info("Network Description")
             opt_profile = self.builder.create_optimization_profile()
 
-            # When ONNX H/W dim is -1, pull min/opt/max from __init__ kwargs;
-            # otherwise reuse the ONNX dim for all three (static).
-            def _resolve_hw(onnx_dim, fallback_min, fallback_opt, fallback_max):
-                """Return ``(min, opt, max)`` for one H/W axis.
-
-                Args:
-                    onnx_dim (int): ONNX dim; ``-1`` if dynamic.
-                    fallback_min/opt/max (Optional[int]): Builder bounds,
-                        required when ``onnx_dim == -1``.
-
-                Returns:
-                    Tuple[int, int, int]: Profile triple for this axis.
-                """
+            def _resolve_dynamic_axis(input_name, input_shape, axis, onnx_dim):
+                """Return the profile triple for one ONNX input axis."""
                 if onnx_dim != -1:
-                    return onnx_dim, onnx_dim, onnx_dim
+                    return int(onnx_dim), int(onnx_dim), int(onnx_dim)
+
+                if axis == 0:
+                    if self.batch_size > 0:
+                        return int(self.batch_size), int(self.batch_size), int(self.batch_size)
+                    return int(self.min_batch_size), int(self.opt_batch_size), int(self.max_batch_size)
+
+                rank = len(input_shape)
+                if rank >= 4 and axis == rank - 2:
+                    fallback_min, fallback_opt, fallback_max = self.min_height, self.opt_height, self.max_height
+                    axis_name = "height"
+                elif rank >= 4 and axis == rank - 1:
+                    fallback_min, fallback_opt, fallback_max = self.min_width, self.opt_width, self.max_width
+                    axis_name = "width"
+                else:
+                    raise ValueError(
+                        f"ONNX input '{input_name}' has a dynamic non-spatial axis "
+                        f"{axis} in shape {tuple(input_shape)}. Provide a static ONNX "
+                        "shape or add model-specific profile bounds for that axis."
+                    )
+
                 if (fallback_min is None) or (fallback_opt is None) or (fallback_max is None):
                     raise ValueError(
-                        "ONNX has dynamic H/W axis but builder was not provided "
-                        "min/opt/max bounds. Pass min_height/opt_height/max_height "
-                        "(or width) to EngineBuilder.__init__."
+                        f"ONNX input '{input_name}' has dynamic {axis_name} but builder "
+                        f"was not provided min/opt/max {axis_name} bounds."
                     )
                 return int(fallback_min), int(fallback_opt), int(fallback_max)
 
@@ -201,35 +209,29 @@ class EngineBuilder(ABC):
                 logger.info("Input '%s' with shape %s and dtype %s", model_input.name, model_input.shape, model_input.dtype)
                 input_shape = model_input.shape
                 input_name = model_input.name
-                # input_shape format: (B, C, H, W). Dim 0 is batch, dim 1 is
-                # channels (always static), dims 2/3 may be dynamic.
-                channels = input_shape[1]
-                h_min, h_opt, h_max = _resolve_hw(
-                    input_shape[2], self.min_height, self.opt_height, self.max_height
-                )
-                w_min, w_opt, w_max = _resolve_hw(
-                    input_shape[3], self.min_width, self.opt_width, self.max_width
-                )
-                if self.batch_size <= 0:
-                    real_shape_min = (self.min_batch_size, channels, h_min, w_min)
-                    real_shape_opt = (self.opt_batch_size, channels, h_opt, w_opt)
-                    real_shape_max = (self.max_batch_size, channels, h_max, w_max)
-                    opt_profile.set_shape(
+
+                shape_min = []
+                shape_opt = []
+                shape_max = []
+                for axis, dim in enumerate(input_shape):
+                    dim_min, dim_opt, dim_max = _resolve_dynamic_axis(input_name, input_shape, axis, dim)
+                    shape_min.append(dim_min)
+                    shape_opt.append(dim_opt)
+                    shape_max.append(dim_max)
+
+                if model_input.is_shape_tensor:
+                    opt_profile.set_shape_input(
                         input=input_name,
-                        min=real_shape_min,
-                        opt=real_shape_opt,
-                        max=real_shape_max
+                        min=tuple(shape_min),
+                        opt=tuple(shape_opt),
+                        max=tuple(shape_max)
                     )
                 else:
-                    # Static-batch path: still honor dynamic H/W if provided.
-                    real_shape_min = (self.batch_size, channels, h_min, w_min)
-                    real_shape_opt = (self.batch_size, channels, h_opt, w_opt)
-                    real_shape_max = (self.batch_size, channels, h_max, w_max)
                     opt_profile.set_shape(
                         input=input_name,
-                        min=real_shape_min,
-                        opt=real_shape_opt,
-                        max=real_shape_max
+                        min=tuple(shape_min),
+                        opt=tuple(shape_opt),
+                        max=tuple(shape_max)
                     )
 
             self.config.add_optimization_profile(opt_profile)

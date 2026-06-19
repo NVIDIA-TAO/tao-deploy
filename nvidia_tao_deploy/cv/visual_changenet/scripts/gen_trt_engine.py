@@ -31,10 +31,12 @@ def main(cfg: ExperimentConfig) -> None:
 
     workspace_size = cfg.gen_trt_engine.tensorrt.workspace_size
 
+    backbone_type = getattr(cfg.model.backbone, "type", cfg.model.backbone)
+
     # For ViT-L, override workspace to be larger. #TODO: Check if needed.
-    if cfg.model.backbone == "vit_large_dinov2" and workspace_size < 24080:
-        logger.warning("Overriding workspace_size from {} to 20480 due to ViT's model size".format(workspace_size))
-        workspace_size = 20480
+    if backbone_type in ("vit_large_dinov2", "vit_large_nvdinov2") and workspace_size < 20:
+        logger.warning("Overriding workspace_size from %s to 20 due to ViT's model size", workspace_size)
+        workspace_size = 20
 
     # Detect if the ONNX model is quantized
     strongly_typed = is_qdq_quantized_onnx(cfg.gen_trt_engine.onnx_file)

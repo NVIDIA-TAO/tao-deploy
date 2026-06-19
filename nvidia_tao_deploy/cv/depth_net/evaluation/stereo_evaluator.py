@@ -16,6 +16,23 @@ def _check_same_shape(preds: ndarray, target: ndarray) -> None:
         raise ValueError(f"Input arrays must have the same shape, got {preds.shape} and {target.shape}")
 
 
+def _to_scalar(value) -> float:
+    """Convert accumulated NumPy metric values to a Python scalar."""
+    value = np.asarray(value)
+    if value.size == 0:
+        return float("nan")
+    return float(value.reshape(-1).mean())
+
+
+def _cfg_value(obj, name, default=None):
+    """Read an OmegaConf/dataclass value with a stable fallback."""
+    try:
+        value = getattr(obj, name)
+    except Exception:
+        return default
+    return default if value is None else value
+
+
 def _abs_rel_update(preds: ndarray, target: ndarray, max_disparity: int = None) -> Tuple[ndarray, int]:
     """Update and returns variables required to compute Mean Absolute Error.
 
@@ -198,10 +215,15 @@ class StereoDepthEvaluator:
     def from_cfg(cls, cfg, sync_on_compute: bool = False) -> "StereoDepthEvaluator":
         """Build a StereoDepthEvaluator from the deploy spec config.
 
-        ``max_disparity`` is currently fixed at 416 to match the
-        FoundationStereo model's effective disparity range.
+        ``model.max_disparity`` is authoritative when set because
+        FastFoundationStereo and FoundationStereo can use different ranges.
+        Fall back to ``dataset.max_disparity`` and then the historical
+        FoundationStereo default.
         """
-        return cls(max_disparity=416, sync_on_compute=sync_on_compute)
+        max_disparity = _cfg_value(_cfg_value(cfg, "model"), "max_disparity")
+        if max_disparity is None:
+            max_disparity = _cfg_value(_cfg_value(cfg, "dataset"), "max_disparity", 416)
+        return cls(max_disparity=int(max_disparity), sync_on_compute=sync_on_compute)
 
     def prepare_sample(
         self,
@@ -333,6 +355,12 @@ class StereoDepthEvaluator:
                 - 'rmse' (float): The final Root Mean Squared Error.
                 - 'rmse_log' (float): The final Root Mean Squared Logarithmic Error.
         """
+        if self.total == 0:
+            return {"d1": float("nan"),
+                    "bp1": float("nan"), "bp2": float("nan"), "bp3": float("nan"),
+                    "epe": float("nan"), "abs_rel": float("nan"), "sq_rel": float("nan"),
+                    "rmse": float("nan"), 'rmse_log': float("nan")}
+
         abs_rel = self.sum_abs_rel / self.total
         sq_rel = self.sum_sq_rel / self.total
         rmse = self.sum_rmse / self.total  # Already RMSE from helper function
@@ -343,7 +371,7 @@ class StereoDepthEvaluator:
         bp3 = self.sum_bp3 / self.total
         epe = self.sum_epe / self.total
 
-        return {"d1": float(d1),
-                "bp1": float(bp1), "bp2": float(bp2), "bp3": float(bp3),
-                "epe": float(epe), "abs_rel": float(abs_rel), "sq_rel": float(sq_rel),
-                "rmse": float(rmse), 'rmse_log': float(rmse_log)}
+        return {"d1": _to_scalar(d1),
+                "bp1": _to_scalar(bp1), "bp2": _to_scalar(bp2), "bp3": _to_scalar(bp3),
+                "epe": _to_scalar(epe), "abs_rel": _to_scalar(abs_rel), "sq_rel": _to_scalar(sq_rel),
+                "rmse": _to_scalar(rmse), 'rmse_log': _to_scalar(rmse_log)}

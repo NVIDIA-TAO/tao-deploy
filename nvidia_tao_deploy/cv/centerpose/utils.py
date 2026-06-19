@@ -205,14 +205,18 @@ def transform_outputs(dets, c, s, output_res):
 
     ret = []
 
+    def _scalar(value):
+        """Return a Python scalar from TensorRT outputs with singleton dims."""
+        return np.asarray(value).reshape(-1)[0].item()
+
     for i in range(dets['scores'].shape[0]):
 
         preds = []
 
         for j in range(len(dets['scores'][i])):
             item = {}
-            item['score'] = float(dets['scores'][i][j])
-            item['cls'] = int(dets['clses'][i][j])
+            item['score'] = float(_scalar(dets['scores'][i][j]))
+            item['cls'] = int(_scalar(dets['clses'][i][j]))
             item['obj_scale'] = dets['obj_scale'][i][j]
 
             # from w,h to c[i], s[i]
