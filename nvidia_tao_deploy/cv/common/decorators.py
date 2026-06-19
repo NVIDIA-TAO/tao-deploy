@@ -63,15 +63,15 @@ def monitor_status(name='module name', mode='gen_trt_engine', hydra=True):
                     message=f"Starting {name} {TASKS[mode]}."
                 )
                 runner(cfg, **kwargs)
-                s_logger.write(
-                    status_level=status_logging.Status.RUNNING,
-                    message=f"{TASKS[mode].capitalize()} finished successfully."
-                )
                 if os.getenv("CLOUD_BASED") == "True":
                     s_logger.write(
                         status_level=status_logging.Status.RUNNING,
                         message="Job artifacts in results dir are being uploaded to the cloud"
                     )
+                s_logger.write(
+                    status_level=status_logging.Status.SUCCESS,
+                    message=f"{TASKS[mode].capitalize()} finished successfully."
+                )
             except (KeyboardInterrupt, SystemError):
                 s_logger.write(
                     message=f"User/System interruption: {mode.capitalize()} was interrupted",

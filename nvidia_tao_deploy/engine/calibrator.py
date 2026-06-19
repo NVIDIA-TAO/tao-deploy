@@ -7,7 +7,6 @@ import logging
 import os
 
 import numpy as np
-import pycuda.autoinit # noqa pylint: disable=unused-import
 import pycuda.driver as cuda
 import tensorrt as trt
 
@@ -30,6 +29,23 @@ class EngineCalibrator(trt.IInt8EntropyCalibrator2):
         self.image_batcher = None
         self.batch_allocation = None
         self.batch_generator = None
+        self._cuda_context = None
+
+    def _ensure_cuda_context(self):
+        """Create a CUDA context only when calibration needs device memory."""
+        if cuda.Context.get_current() is not None:
+            return
+        cuda.init()
+        self._cuda_context = cuda.Device(0).make_context()
+
+    def __del__(self):
+        """Release the CUDA context this calibrator created, if any."""
+        if self._cuda_context is not None:
+            try:
+                self._cuda_context.pop()
+            except cuda.Error:
+                logger.debug("Ignoring CUDA context cleanup failure", exc_info=True)
+            self._cuda_context = None
 
     def set_image_batcher(self, image_batcher):
         """Define the image batcher to use, if any.
@@ -39,6 +55,7 @@ class EngineCalibrator(trt.IInt8EntropyCalibrator2):
         Args:
             image_batcher (obj): The ImageBatcher object
         """
+        self._ensure_cuda_context()
         self.image_batcher = image_batcher
         size = int(np.dtype(self.image_batcher.dtype).itemsize * np.prod(self.image_batcher.shape))
         self.batch_allocation = cuda.mem_alloc(size)

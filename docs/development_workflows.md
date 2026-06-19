@@ -57,6 +57,22 @@ bash docker/build.sh --build --x86 --push
 
 Update the matching platform digest in `docker/manifest.json`.
 
+**Update every digest reference, not just `docker/manifest.json`.** The base-image
+digest is hardcoded in several files. A base-image rebuild must update all of them for
+the target architecture (`x86` and/or `arm`), or Jenkins and the release build will keep
+pulling the stale image:
+
+| Location | What it drives |
+| :--- | :--- |
+| `docker/manifest.json` | `tao_deploy` launcher + `ci/utils.py` (static/functional tests); per-arch `x86`/`arm` digests |
+| `Jenkinsfile.dev`, `Jenkinsfile.develop`, `Jenkinsfile.nightly` | the `base-image` container the Jenkins jobs run in |
+| `Jenkinsfile.release` | `BUILD_X86` / `BUILD_ARM` release base images |
+| `release/docker/Dockerfile.release` | `FROM` base digests for the release image |
+
+Find them all with `grep -rl <old-digest> .` and replace per architecture (the `x86`
+and `arm` digests are distinct strings, so a per-digest `sed` is safe). The Jetson
+(`Dockerfile.l4t`) base stack is tracked separately.
+
 ## Build A Release Image
 
 The release image installs a wheel built from this repository.
