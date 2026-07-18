@@ -27,7 +27,12 @@ try:
 except ImportError:
     DEFAULT_SPECS_AVAILABLE = False
     default_specs = None
-from nvidia_tao_core.telemetry.telemetry import send_telemetry_data
+try:
+    from nvidia_tao_core.telemetry.telemetry import send_telemetry_data
+    TELEMETRY_AVAILABLE = True
+except ImportError:
+    send_telemetry_data = None
+    TELEMETRY_AVAILABLE = False
 
 
 RELEASE = True
@@ -319,26 +324,29 @@ def launch(args, unknown_args, subtasks, network="tao-deploy"):
     end = time()
     time_lapsed = int(end - start)
 
-    try:
-        gpu_data = []
-        for device in get_device_details():
-            gpu_data.append(device.get_config())
-        logger.info("Sending telemetry data.")
-        send_telemetry_data(
-            network,
-            args["subtask"],
-            gpu_data,
-            num_gpus=num_gpus,
-            time_lapsed=time_lapsed,
-            pass_status=process_passed,
-            user_error=user_error
-        )
-    except Exception as e:
-        logger.warning(
-            "Telemetry data couldn't be sent, but the command ran successfully."
-        )
-        logger.warning("{}".format(e))
-        pass
+    if not TELEMETRY_AVAILABLE:
+        logger.info("Telemetry module not available; skipping telemetry reporting.")
+    else:
+        try:
+            gpu_data = []
+            for device in get_device_details():
+                gpu_data.append(device.get_config())
+            logger.info("Sending telemetry data.")
+            send_telemetry_data(
+                network,
+                args["subtask"],
+                gpu_data,
+                num_gpus=num_gpus,
+                time_lapsed=time_lapsed,
+                pass_status=process_passed,
+                user_error=user_error
+            )
+        except Exception as e:
+            logger.warning(
+                "Telemetry data couldn't be sent, but the command ran successfully."
+            )
+            logger.warning("{}".format(e))
+            pass
 
     if not process_passed:
         status_logging.get_status_logger().write(
