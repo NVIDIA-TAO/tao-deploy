@@ -1,9 +1,53 @@
+# SPDX-FileCopyrightText: Copyright (c) 2026 NVIDIA CORPORATION & AFFILIATES. All rights reserved.
+# SPDX-License-Identifier: Apache-2.0
+
+default_install_hook_types:
+- pre-commit
+- pre-push
 repos:
-  - repo: local
-    hooks:
-      - id: update-docs-supported-commands
-        name: Update docs supported commands
-        entry: python3 tools/update_docs_supported_commands.py
-        language: system
-        pass_filenames: false
-        files: ^(setup\.py|tools/update_docs_supported_commands\.py|docs/supported_commands\.md|nvidia_tao_deploy/.+/(entrypoint|scripts)/.+\.py)$
+- repo: local
+  hooks:
+  - id: update-docs-supported-commands
+    name: Update docs supported commands
+    entry: python3 tools/update_docs_supported_commands.py
+    language: system
+    pass_filenames: false
+    files: ^(setup\.py|tools/update_docs_supported_commands\.py|docs/supported_commands\.md|nvidia_tao_deploy/.+/(entrypoint|scripts)/.+\.py)$
+  - id: license-header
+    name: license header
+    description: Every source file must carry an SPDX license header.
+    entry: python3 .github/hooks/check_license_header.py
+    language: system
+    files: \.(py|sh)$
+    stages:
+    - pre-push
+  - id: pylint
+    name: pylint
+    description: Static analysis, configured by .pylintrc.
+    entry: pylint --rcfile .pylintrc
+    language: system
+    types:
+    - python
+    files: ^(nvidia_tao_deploy/)
+    stages:
+    - pre-push
+  - id: pydocstyle
+    name: pydocstyle
+    description: Docstring conventions.
+    entry: pydocstyle --ignore=D4,D107,D200,D203,D205,D210,D211,D212,D213,D301,D400,D401 "--match=((?!_pb2).)*\.py"
+    language: system
+    types:
+    - python
+    files: ^(nvidia_tao_deploy/)
+    stages:
+    - pre-push
+  - id: flake8
+    name: flake8
+    description: Style and lint checks.
+    entry: flake8 --ignore=E24,W504,E501 "--exclude=*_pb2.py"
+    language: system
+    types:
+    - python
+    files: ^(nvidia_tao_deploy/)
+    stages:
+    - pre-push
