@@ -368,6 +368,13 @@ class Backbone:
 class Mask2FormerModelConfig:
     """Mask2former model config."""
 
+    precise_msda: bool = BOOL_FIELD(
+        value=False,
+        default_value=False,
+        display_name="precise MSDeformAttn",
+        description="Schema-compat mirror of the training config's deterministic MSDeformAttn "
+                    "backward flag. Training-only; ignored at inference/TRT."
+    )
     export: bool = BOOL_FIELD(
         value=False,
         default_value=False,
