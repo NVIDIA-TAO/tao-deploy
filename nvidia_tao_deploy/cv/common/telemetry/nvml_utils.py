@@ -6,6 +6,14 @@
 import json
 import pynvml
 
+
+def _as_str(value):
+    """Normalize NVML string values that may be bytes (old pynvml) or str (new pynvml)."""
+    if isinstance(value, (bytes, bytearray)):
+        return value.decode()
+    return value
+
+
 BRAND_NAMES = {
     pynvml.NVML_BRAND_UNKNOWN: "Unknown",
     pynvml.NVML_BRAND_QUADRO: "Quadro",
@@ -60,8 +68,8 @@ class GPUDevice:
         """
         assert self.defined, "Device wasn't defined."
         config_dict = {}
-        config_dict["name"] = self.name.decode().replace(" ", "-")
-        config_dict["pci_bus_id"] = self.pci_bus_id
+        config_dict["name"] = _as_str(self.name).replace(" ", "-")
+        config_dict["pci_bus_id"] = _as_str(self.pci_bus_id)
         config_dict["brand"] = self.brand
         config_dict["memory"] = self.memory
         config_dict["cuda_compute_capability"] = self.cuda_compute_capability

@@ -635,6 +635,13 @@ class TextEncoder:
 class OneFormerModelConfig:
     """OneFormer model config."""
 
+    precise_msda: bool = BOOL_FIELD(
+        value=False,
+        default_value=False,
+        display_name="precise MSDeformAttn",
+        description="Schema-compat mirror of the training config's deterministic MSDeformAttn "
+                    "backward flag. Training-only; ignored at inference/TRT."
+    )
     sem_seg_head: SemanticSegmentationHead = DATACLASS_FIELD(
         SemanticSegmentationHead(),
         description="Semantic segmentation head.",

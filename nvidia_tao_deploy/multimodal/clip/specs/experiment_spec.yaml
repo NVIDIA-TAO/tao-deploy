@@ -31,6 +31,7 @@ dataset:
       caption_dir: ???            # Directory containing caption .txt files
       caption_file_suffix: .txt
       image_list_file: null       # Optional: text file listing image filenames
+      attribute_pairs_file: null  # Optional: split-aligned PAS pairs metadata
     batch_size: 16
     num_workers: 8
 

@@ -168,6 +168,15 @@ class CLIPDataPathConfig:
                     "Caption filename = image_basename + caption_file_suffix (e.g., 'image.png' -> 'image.txt').",
         display_name="Caption File Suffix",
     )
+    attribute_pairs_file: Optional[str] = STR_FIELD(
+        value=None,
+        default_value=None,
+        description=(
+            "Optional split-aligned pairs metadata file used for "
+            "metadata-aware validation."
+        ),
+        display_name="Attribute Pairs File",
+    )
 
 
 @dataclass
@@ -231,6 +240,15 @@ class CLIPTrainDataConfig(CLIPDataLoaderConfig):
         valid_options="wds,custom",
         description="Dataset type: 'custom' for filesystem-based or 'wds' for WebDataset.",
         display_name="Dataset Type",
+    )
+    include_attribute_metadata: bool = BOOL_FIELD(
+        value=False,
+        default_value=False,
+        description=(
+            "Include image/text attribute tensors in custom training batches. "
+            "Required when siglip_loss_mask_mode is enabled."
+        ),
+        display_name="Include Attribute Metadata",
     )
     wds: Optional[CLIPWDSConfig] = DATACLASS_FIELD(
         CLIPWDSConfig(),
@@ -366,6 +384,35 @@ class CLIPTrainConfig(TrainConfig):
         valid_options="siglip,clip",
         description="Contrastive loss function: 'siglip' (sigmoid) or 'clip' (softmax).",
         display_name="Loss Type",
+    )
+    siglip_loss_dist_impl: str = STR_FIELD(
+        value="gather",
+        default_value="gather",
+        valid_options="bidir,shift,reduce,gather,local",
+        description=(
+            "Distributed implementation for SigLIP loss negative exchange. "
+            "Use 'local' to disable cross-rank negative exchange. "
+            "Only used when loss_type is 'siglip'."
+        ),
+        display_name="SigLIP Loss Distributed Implementation",
+    )
+    siglip_loss_mask_mode: str = STR_FIELD(
+        value="none",
+        default_value="none",
+        valid_options=(
+            "none,attribute_match_ignore,"
+            "attribute_plus_accessory_match_ignore"
+        ),
+        description=(
+            "Optional metadata-based masking mode for SigLIP loss. "
+            "'none' keeps existing behavior; 'attribute_match_ignore' ignores "
+            "off-diagonal negatives whose attributes match the text query; "
+            "'attribute_plus_accessory_match_ignore' additionally requires "
+            "all query accessories to be present in the image. "
+            "Metadata masking requires include_attribute_metadata=True on the "
+            "custom training dataset and a supported distributed implementation."
+        ),
+        display_name="SigLIP Loss Mask Mode",
     )
     precision: str = STR_FIELD(
         value="fp16",

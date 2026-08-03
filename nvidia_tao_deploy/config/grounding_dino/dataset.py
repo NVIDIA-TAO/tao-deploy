@@ -223,6 +223,17 @@ class GDINODatasetConfig:
         valid_max="inf",
         display_name="max labels"
     )
+    deterministic_label_order: bool = BOOL_FIELD(
+        value=True,
+        default_value=True,
+        display_name="deterministic label order",
+        description=(
+            "Training-time flag that canonicalizes the ODVG caption/label order with sorted() "
+            "so caption token order is reproducible across process launches (independent of "
+            "PYTHONHASHSEED). Present here for train/deploy spec parity so a training spec loads "
+            "without error; it has no effect on TensorRT evaluation/inference."
+        )
+    )
     eval_class_ids: Optional[List[int]] = LIST_FIELD(
         arrList=None,
         default_value=[1],

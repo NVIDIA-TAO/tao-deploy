@@ -68,6 +68,13 @@ SUPPORTED_BACKBONES = [
 class DINOModelConfig:
     """DINO model config."""
 
+    precise_msda: bool = BOOL_FIELD(
+        value=False,
+        default_value=False,
+        display_name="precise MSDeformAttn",
+        description="Schema-compat mirror of the training config's deterministic MSDeformAttn "
+                    "backward flag. Training-only; ignored at inference/TRT."
+    )
     pretrained_backbone_path: Optional[str] = STR_FIELD(
         value=None,
         default_value="",
