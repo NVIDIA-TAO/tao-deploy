@@ -25,7 +25,6 @@ onnxruntime==1.25.1
 # Pinning to 4.12.0.88 leaves the base's source build in place ("already satisfied"). (TAO-2183 / FF-3)
 opencv-python==4.12.0.88
 pipreqs==0.5.0
-pyarmor==8.5.8  # 8.5.8 is version nvidia-eff wheels use
 pyclipper==1.4.0
 pycocotools==2.0.11
 pydocstyle==6.3.0

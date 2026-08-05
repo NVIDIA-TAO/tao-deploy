@@ -25,8 +25,6 @@ shapely==1.8.2
 natsort==8.4.0
 tqdm==4.64.0
 transformers>=4.38.2
-# Required for nvidia_eff_tao_encryption
-pyarmor==7.7.4
 auditwheel==5.4.0
 patchelf==0.17.2.1
 # CI related
