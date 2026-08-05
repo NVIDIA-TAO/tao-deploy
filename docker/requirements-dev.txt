@@ -20,7 +20,6 @@ onnx==1.21.0
 onnxruntime==1.25.1
 opencv-python==4.13.0.92
 pipreqs==0.5.0
-pyarmor==8.5.8  # 8.5.8 is version nvidia-eff wheels use
 pyclipper==1.4.0
 pycocotools==2.0.11
 pycuda==2026.1
