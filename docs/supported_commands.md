@@ -41,6 +41,7 @@ _Source: `setup.py` console scripts plus each implementation's `scripts/` packag
 | `segformer` | cv | `nvidia_tao_deploy.cv.segformer` | evaluate, gen_trt_engine, inference, default_specs |
 | `ssd` | cv | `nvidia_tao_deploy.cv.ssd` | evaluate, gen_trt_engine, inference |
 | `unet` | cv | `nvidia_tao_deploy.cv.unet` | evaluate, gen_trt_engine, inference |
+| `video_clip` | multimodal | `nvidia_tao_deploy.multimodal.video_clip` | evaluate, gen_trt_engine, inference, default_specs |
 | `visual_changenet` | cv | `nvidia_tao_deploy.cv.visual_changenet` | evaluate, gen_trt_engine, inference, default_specs |
 | `yolo_v3` | cv | `nvidia_tao_deploy.cv.yolo_v3` | evaluate, gen_trt_engine, inference |
 | `yolo_v4` | cv | `nvidia_tao_deploy.cv.yolo_v4` | evaluate, gen_trt_engine, inference |
