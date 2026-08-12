@@ -134,6 +134,14 @@ class EngineBuilder(ABC):
                 faster_dynamic_shapes = False
             self.config.set_preview_feature(trt.PreviewFeature.FASTER_DYNAMIC_SHAPES_0805, faster_dynamic_shapes)
 
+    def _extra_network_flags(self):
+        """Extra NetworkDefinitionCreationFlag bits OR-ed into create_network.
+
+        Base returns 0; subclasses may override (e.g. to request a strongly-typed
+        network for a mixed-precision ONNX).
+        """
+        return 0
+
     def create_network(self, model_path, file_format="onnx"):
         """Parse the UFF/ONNX graph and create the corresponding TensorRT network definition.
 
@@ -145,6 +153,7 @@ class EngineBuilder(ABC):
             network_flags = 1 << int(trt.NetworkDefinitionCreationFlag.EXPLICIT_BATCH)
             if TRT_8_API:
                 network_flags = network_flags | (1 << int(trt.NetworkDefinitionCreationFlag.EXPLICIT_PRECISION))
+            network_flags |= self._extra_network_flags()
 
             self.network = self.builder.create_network(network_flags)
             self.parser = trt.OnnxParser(self.network, self.trt_logger)

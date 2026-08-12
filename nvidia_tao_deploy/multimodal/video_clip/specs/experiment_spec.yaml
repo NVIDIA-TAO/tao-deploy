@@ -1,0 +1,53 @@
+# Video-CLIP (InternVideo2-CLIP) TensorRT Deployment Configuration
+#
+# Tasks:
+# - gen_trt_engine: Convert the combined ONNX model to a TensorRT engine
+# - evaluate:       Multi-relevance text->video retrieval (mAP / Recall / nDCG)
+# - inference:      Extract text and/or gallery-video embeddings to HDF5
+
+results_dir: ???
+
+model:
+  type: internvideo2-clip-l14
+  image_size: 224              # overridden by the engine's image input at runtime
+  canonicalize_text: false
+
+# =============================================================================
+# TensorRT Engine Generation
+# =============================================================================
+gen_trt_engine:
+  onnx_file: ???               # combined ONNX (image + text) from tao-pytorch export
+  trt_engine: ???              # output TensorRT engine path
+  batch_size: -1               # -1 for dynamic batch
+  tensorrt:
+    workspace_size: 8192       # MB
+    data_type: fp32            # fp32 required — fp16 collapses the vision tower
+    min_batch_size: 1
+    opt_batch_size: 8
+    max_batch_size: 16
+
+# =============================================================================
+# Dataset (gallery + explicit-relevance queries) for evaluation/inference
+# =============================================================================
+dataset:
+  val:
+    gt_queries: ???            # domain_test_*.json with 'gallery' + 'queries'
+    metadata: ???              # vadr1_chunks JSON to resolve chunk_id -> video/time
+    video_root: null           # optional root for relative video paths
+    path_prefix_mapping: {}     # e.g. {"/workspace/data": "/home/alicli/data"}
+    batch_size: 8
+
+# =============================================================================
+# Retrieval Evaluation
+# =============================================================================
+evaluate:
+  trt_engine: ???
+  batch_size: 8
+
+# =============================================================================
+# Inference
+# =============================================================================
+inference:
+  trt_engine: ???
+  batch_size: 8
+  text_file: null              # optional: one prompt per line -> text_embeddings.h5

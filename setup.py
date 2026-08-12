@@ -94,6 +94,7 @@ setuptools.setup(
             'nvdinov2=nvidia_tao_deploy.cv.nvdinov2.entrypoint.nvdinov2:main',
             'mae=nvidia_tao_deploy.cv.mae.entrypoint.mae:main',
             'clip=nvidia_tao_deploy.multimodal.clip.entrypoint.clip:main',
+            'video_clip=nvidia_tao_deploy.multimodal.video_clip.entrypoint.video_clip:main',
         ]
     }
 )
