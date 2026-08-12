@@ -55,8 +55,6 @@ def _resolve_video_path(video_path, data_root=None, path_prefix_mapping=None):
 
     path = Path(video_path)
     if path.is_absolute():
-        if data_root and video_path.startswith("/media/wbf/"):
-            return str(Path(data_root) / video_path[len("/media/wbf/"):])
         return str(path)
     if data_root:
         return str(Path(data_root) / path)

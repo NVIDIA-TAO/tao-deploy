@@ -3,7 +3,7 @@
 
 """Video-CLIP (InternVideo2-CLIP) deploy experiment configuration."""
 
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from typing import Dict, List, Optional
 from omegaconf import MISSING
 
@@ -15,6 +15,7 @@ from nvidia_tao_deploy.config.common.common_config import (
 from nvidia_tao_deploy.config.utils.types import (
     BOOL_FIELD,
     DATACLASS_FIELD,
+    DICT_FIELD,
     INT_FIELD,
     LIST_FIELD,
     STR_FIELD,
@@ -78,7 +79,12 @@ class VideoCLIPEvalDataConfig:
         description="Optional root prepended to relative video paths.",
         display_name="Video Root",
     )
-    path_prefix_mapping: Dict[str, str] = field(default_factory=dict)
+    path_prefix_mapping: Dict[str, str] = DICT_FIELD(
+        {},
+        description="Optional mapping from original path prefixes to local "
+                    "prefixes, applied before video_root.",
+        display_name="Path Prefix Mapping",
+    )
     batch_size: int = INT_FIELD(
         value=8,
         default_value=8,

@@ -51,7 +51,8 @@ def find_export_artifacts(trt_engine_path: str) -> dict:
     parent_dir = os.path.dirname(engine_dir)
     search_dirs = [engine_dir, os.path.join(parent_dir, "export"), parent_dir]
 
-    result = {'config_path': None, 'tokenizer_path': None}
+    result = {'config_path': None, 'tokenizer_path': None,
+              'search_dirs': search_dirs}
     for search_dir in search_dirs:
         if not os.path.isdir(search_dir):
             continue
@@ -83,6 +84,16 @@ def load_model_config(trt_engine_path: str) -> dict:
         model_cfg = cfg.get('model', {})
         model_type = getattr(model_cfg, 'type', model_type)
         canonicalize = bool(getattr(model_cfg, 'canonicalize_text', False))
+    else:
+        logger.warning(
+            "No *_config.yaml found for engine %s (searched: %s). Assuming "
+            "model.type=%s and model.canonicalize_text=%s. If the model was "
+            "exported with canonicalize_text: true, queries here are tokenized "
+            "differently than at training time and retrieval accuracy degrades "
+            "silently -- copy the exported *_config.yaml next to the engine.",
+            trt_engine_path, ", ".join(artifacts['search_dirs']),
+            model_type, canonicalize,
+        )
     return {
         'model_type': model_type,
         'canonicalize_text': canonicalize,

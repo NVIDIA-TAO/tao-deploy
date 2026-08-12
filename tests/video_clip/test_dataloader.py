@@ -90,6 +90,12 @@ class TestChunkIndex:
         )
         assert idx["CHAD/1_086_1#0"]["video_path"] == "/mnt/local/a.mp4"
 
+    def test_data_root_does_not_rewrite_absolute_paths(self, tmp_path):
+        # data_root only prefixes RELATIVE paths; absolute paths pass through
+        # untouched. Remapping absolute paths is path_prefix_mapping's job.
+        idx = build_chunk_index(self._write_meta(tmp_path), data_root="/mnt/local")
+        assert idx["CHAD/1_086_1#0"]["video_path"] == "/data/a.mp4"
+
     def test_gallery_loader_missing_id_raises(self, tmp_path):
         idx = build_chunk_index(self._write_meta(tmp_path))
         with pytest.raises(KeyError):

@@ -57,6 +57,25 @@ class TestRetrievalEvaluator:
         assert m.map_score == 0.0
 
 
+class TestRetrievalAUC:
+    """AUC needs scores and labels in the SAME order; ranked labels alone are not enough."""
+
+    def setup_method(self):
+        self.gallery = np.eye(4, dtype=np.float32)
+        # sims = [1,2,3,4]/||q||, so the ranking order [3,2,1,0] is NOT the
+        # gallery order -- a misaligned call gives the exact opposite answer.
+        self.q = np.array([[1, 2, 3, 4]], dtype=np.float32)
+        self.ev = RetrievalEvaluator(k_values=(1,), compute_auc=True)
+
+    def test_only_lowest_scoring_clip_relevant_is_auc_zero(self):
+        m = self.ev.evaluate(self.q, self.gallery, [[0]])
+        assert abs(m.auc - 0.0) < 1e-6
+
+    def test_only_highest_scoring_clip_relevant_is_auc_one(self):
+        m = self.ev.evaluate(self.q, self.gallery, [[3]])
+        assert abs(m.auc - 1.0) < 1e-6
+
+
 class TestEvaluateBySlice:
     def test_slice_split_and_overall(self):
         gallery = np.eye(3, dtype=np.float32)
