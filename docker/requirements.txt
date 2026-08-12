@@ -15,7 +15,7 @@ mpi4py==4.1.1
 natsort==8.4.0
 nvidia-eff==0.6.6
 nvidia-eff-tao-encryption==0.1.9
-onnx==1.21.0
+onnx==1.22.0
 onnxruntime==1.25.1
 # Must match the codec-hardened, source-built OpenCV in the base image
 # (WITH_FFMPEG=OFF, 4.12.0.88). The base wheel 4.13.0.92 is published binary-only and
