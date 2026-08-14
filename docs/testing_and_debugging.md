@@ -28,6 +28,30 @@ scanning (`secret-scan.yml`), and PR title format (`pr-title.yml`).
 Functional (GPU) tests run through the externally triggered
 `blossom-ci.yml` workflow, not on every push.
 
+## Test Environment Setup
+
+The base development image has pytest and the runtime dependencies
+(`docker/requirements.txt`, `requirements-dev.txt`), but **not** the TAO
+packages themselves. Set up once per container:
+
+```sh
+# On the host
+git submodule update --init          # tao-core/ is empty otherwise
+source scripts/envsetup.sh
+tao_deploy --gpus all -- bash
+
+# Inside the container (repository is mounted at /workspace/tao-deploy)
+pip install /workspace/tao-deploy/tao-core/.   # provides nvidia_tao_core
+cd /workspace/tao-deploy && python setup.py develop   # console commands + package
+pytest --color=yes -v tests/core/test_dual_logging.py  # smoke check
+```
+
+`nvidia_tao_core` is not in the requirements files, and its import in
+`status_logging.py` is unguarded, so nearly every test and command fails until
+the submodule is installed. Engine and inferencer tests additionally need a
+GPU, TensorRT, and model artifacts; several suites expect datasets mounted
+from private paths.
+
 ## Test Map
 
 | Area | Examples |

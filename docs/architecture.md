@@ -1,18 +1,60 @@
 # Architecture
 
-This guide explains the runtime and source-code flow for TAO Deploy model
-families: how a console command reaches a script, how configuration is
-validated, and how the shared TensorRT runtime is layered. For a directory-level
-orientation, read the [Codebase tour](codebase_tour.md) first.
+This guide explains what TAO Deploy is, how customers run it, and how a command
+flows through the source code. For a directory-level orientation, read the
+[Codebase tour](codebase_tour.md) first.
 
-![TAO Deploy source runtime flow](assets/source_runtime_flow.svg)
+## What TAO Deploy Is
 
-TAO Deploy is a deployment runtime repository, not a training repository. Every
-command accepts an exported model (ONNX or encrypted ETLT), builds or loads a
-TensorRT engine, runs inference or evaluation, and writes outputs under a
-results directory.
+TAO Deploy is the TensorRT backend of the TAO ecosystem: it takes models
+exported by tao-pytorch (ONNX or encrypted ETLT), builds optimized TensorRT
+engines, and runs engine-based inference and evaluation. This repository is its
+source. It ships to users as one container,
+`nvcr.io/nvidia/tao/tao-toolkit:<version>-deploy`, alongside the sibling
+backends built from tao-pytorch (training) and tao-dataservices (dataset
+preparation).
+
+The product surface is the set of per-model console commands this package
+installs (`dino`, `rtdetr`, `grounding_dino`, and so on — 39 in total) with
+their `gen_trt_engine`, `evaluate`, and `inference` subtasks. This is a
+deployment runtime repository, not a training repository.
+
+## How Users Run TAO Deploy
+
+As of TAO 7.0 there is one supported user surface, with the container CLI
+underneath it:
+
+1. **Agent and TAO skills (current).** Users load the `tao-skills` plugin in a
+   coding agent and ask for the outcome ("build an INT8 engine from this DINO
+   export"). The skills and the TAO Execution SDK dispatch a job to the user's
+   compute backend, which runs the deploy container and invokes the console
+   commands documented here.
+2. **Container CLI (the layer underneath).** Inside the `<version>-deploy`
+   container: `dino gen_trt_engine -e spec.yaml`, `dino evaluate -e spec.yaml`,
+   `dino inference -e spec.yaml`.
+
+Two older surfaces were **removed in TAO 7.0**: the **TAO Launcher**
+(`tao deploy <network> <verb>`, deprecated in 6.0) and **FTMS** (the
+Fine-Tuning MicroService REST API plus `nvidia-tao-client`). This repository
+still contains FTMS-era code paths (the microservice `CMD` in the release
+Dockerfile, `JOB_ID`-gated log teeing, the config field metadata consumed by
+the FTMS specification UI); treat them as legacy integration surfaces.
+
+## Terminology
+
+| Term | Meaning here |
+| :--- | :--- |
+| Model family | One deployable network with its own console command and package under `cv/` or `multimodal/`, such as `dino`. |
+| Subtask | One operation of a family, implemented as one module in its `scripts/` package: `dino gen_trt_engine`. |
+| Specification (spec) | The YAML experiment file passed with `-e`, validated against the family's dataclass schema. |
+| Entry point styles | The three in-repo dispatch mechanisms under `cv/common/entrypoint/` (Hydra, proto, agnostic). Internal code, not a product. |
+| `tao_deploy` | The **development-only** container launcher defined by `scripts/envsetup.sh` (a shell function over `runner/tao_deploy.py`). Users never see it. |
+| TAO Launcher | The removed `tao` CLI product (deprecated 6.0, removed 7.0). Not related to `tao_deploy` or the entry point code above. |
+| FTMS | The removed Fine-Tuning MicroService REST API and `nvidia-tao-client`. Its in-repo remnants are noted above. |
 
 ## Command Runtime Flow
+
+![TAO Deploy source runtime flow](assets/source_runtime_flow.svg)
 
 `setup.py` registers each installed command:
 
@@ -174,9 +216,10 @@ For local development the submodule is mounted with the checkout at
 `/workspace/tao-deploy/tao-core`, and the launcher's `PYTHONPATH` setup makes
 `nvidia_tao_core` importable from there.
 
-## Container Flow
+## Container Flow (Development Only)
 
-Source development usually starts with:
+`tao_deploy` is the development launcher (refer to Terminology); users never
+see it. Source development usually starts with:
 
 ```sh
 source scripts/envsetup.sh

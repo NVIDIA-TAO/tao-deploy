@@ -3,8 +3,13 @@
 This is a guided walk through the TAO Deploy repository for developers picking
 up the codebase for the first time. It answers three questions: what each
 directory is for, how the Python package is organized into modules, and where
-the sharp edges are. For the runtime and data-flow view, read
-[Architecture](architecture.md) next.
+the sharp edges are.
+
+For what the product is, how customers run it, and definitions of the terms
+used below (model family, subtask, `tao_deploy`), read the opening sections of
+[Architecture](architecture.md) first; this repository builds the
+`nvcr.io/nvidia/tao/tao-toolkit:<version>-deploy` container, and the console
+commands below are its user-facing surface.
 
 ![TAO Deploy module map](assets/module_map.svg)
 
