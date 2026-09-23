@@ -51,6 +51,7 @@ bash release/docker/deploy.sh --build --wheel
 | [Container power users](docs/container_power_users.md) | `tao_deploy`, direct Docker equivalents, manifests, mounts, GPUs, and Jetson notes. |
 | [Deploy backend integration](docs/deploy_backend_integration.md) | Source-backed checklist for adding or updating a model deploy backend. |
 | [Supported commands](docs/supported_commands.md) | Generated console-command inventory from `setup.py`. |
+| [Sparse4D backend](nvidia_tao_deploy/cv/sparse4d/README.md) | Source-branch engine generation, prepared-frame temporal inference, MSDA plugin requirements and tests. |
 
 ## Source Map
 

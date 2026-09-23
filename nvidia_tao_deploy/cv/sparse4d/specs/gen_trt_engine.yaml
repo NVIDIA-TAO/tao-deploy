@@ -1,0 +1,14 @@
+model_name: sparse4d
+results_dir: /results/sparse4d
+model:
+  num_cameras: 6
+  input_height: 256
+  input_width: 448
+plugin:
+  path: /plugins/libmsda.so
+  sha256: ???
+gen_trt_engine:
+  onnx_file: /models/sparse4d.onnx
+  save_engine: /results/sparse4d/sparse4d.engine
+  data_type: fp32
+  workspace_size: 4.0
