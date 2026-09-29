@@ -17,11 +17,18 @@ from nvidia_tao_deploy.cv.sparse4d.inferencer import check_metadata
 from nvidia_tao_deploy.cv.sparse4d.runtime import load_plugin
 
 
+pytestmark = pytest.mark.sparse4d
+
+
 def test_schema_independent_mutable_defaults():
     """Configs are independently owned and compose without training dependencies."""
     first, second = ExperimentConfig(), ExperimentConfig()
+    assert first.inference.gpu_ids is not second.inference.gpu_ids
     first.inference.gpu_ids.append(1)
     assert second.inference.gpu_ids == [0]
+    third = ExperimentConfig()
+    assert third.inference.gpu_ids == [0]
+    assert first.inference.__dataclass_fields__["gpu_ids"].metadata["default_value"] == [0]
     cfg = OmegaConf.structured(second)
     assert cfg.model_name == "sparse4d"
     assert cfg.gen_trt_engine.data_type == "fp32"
@@ -146,3 +153,22 @@ def test_metadata_tampering(tmp_path, field, value):
     sidecar.write_text(json.dumps(metadata))
     with pytest.raises(ValueError, match="provenance"):
         check_metadata(cfg, "10.test")
+
+
+@pytest.mark.parametrize("runtime_version", ["10.15.1.10", "10.15.0.11"])
+def test_metadata_rejects_patch_and_build_version_changes(tmp_path, runtime_version):
+    """Rebuild even when only the TensorRT patch or build number changes."""
+    cfg = ExperimentConfig()
+    engine = tmp_path / "model.engine"
+    engine.write_bytes(b"fake engine")
+    cfg.inference.trt_engine = str(engine)
+    cfg.plugin.sha256 = "a" * 64
+    metadata = {"version": 1, "model_name": "sparse4d", "engine_sha256": sha256(engine),
+                "plugin_sha256": cfg.plugin.sha256, "tensorrt": "10.15.0.10",
+                "plugin_conformance": {"float32": "passed", "float16": "passed"},
+                "model": vars(cfg.model),
+                "input_shapes": {k: list(v) for k, v in input_shapes(cfg.model).items()}}
+    (tmp_path / "model.engine.json").write_text(json.dumps(metadata))
+    assert check_metadata(cfg, "10.15.0.10") == metadata
+    with pytest.raises(ValueError, match="regenerate with this TensorRT"):
+        check_metadata(cfg, runtime_version)

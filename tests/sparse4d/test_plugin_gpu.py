@@ -10,6 +10,9 @@ import pytest
 from nvidia_tao_deploy.cv.sparse4d.runtime import load_plugin
 
 
+pytestmark = pytest.mark.sparse4d
+
+
 @pytest.mark.skipif(not os.getenv("SPARSE4D_PLUGIN_PATH"), reason="Set plugin path/hash in a TensorRT GPU environment")
 def test_msda_plugin_bounds_and_nonfinite():
     """Gate both compute precisions using the explicitly selected trusted binary."""

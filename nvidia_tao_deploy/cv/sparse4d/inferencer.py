@@ -18,6 +18,8 @@ def check_metadata(cfg, trt_version):
     """Refuse a stale engine, changed plugin, or incompatible deployment config."""
     engine = Path(cfg.inference.trt_engine)
     metadata = json.loads(Path(str(engine) + ".json").read_text(encoding="utf-8"))
+    # Exact TensorRT version matching (including patch/build) is intentional:
+    # these engines are not built with version compatibility; rebuild on upgrade.
     expected = {"version": 1, "model_name": "sparse4d", "engine_sha256": sha256(engine),
                 "plugin_sha256": cfg.plugin.sha256.lower(), "tensorrt": trt_version,
                 "plugin_conformance": {"float32": "passed", "float16": "passed"}}

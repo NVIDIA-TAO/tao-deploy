@@ -10,6 +10,9 @@ from nvidia_tao_deploy.cv.sparse4d.contract import OUTPUTS
 from nvidia_tao_deploy.cv.sparse4d.postprocessing import TemporalState, decode, sigmoid, validate_outputs
 
 
+pytestmark = pytest.mark.sparse4d
+
+
 @pytest.fixture
 def sample():
     """Tiny pure NumPy ABI fixture; no weights, images or annotation files."""

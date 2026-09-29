@@ -17,8 +17,10 @@ def main(cfg: ExperimentConfig):
     """Run engine generation with TAO status and experiment logging."""
     try:
         build_engine(cfg)
-    except RuntimeError as error:
-        # Route TensorRT/PyCUDA failures through the shared status error handler.
+    except Exception as error:
+        # Native ONNX/PyCUDA errors do not derive from RuntimeError. Translate at
+        # this action boundary so monitor_status records FAILURE and re-raises.
+        # Preserve the cause; process-control BaseExceptions are not intercepted.
         raise ValueError(f"Sparse4D engine generation failed: {error}") from error
 
 

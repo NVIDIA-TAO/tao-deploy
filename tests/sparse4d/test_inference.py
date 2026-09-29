@@ -13,6 +13,9 @@ from nvidia_tao_deploy.cv.sparse4d.contract import OUTPUTS, input_shapes, sha256
 from nvidia_tao_deploy.cv.sparse4d import inferencer
 
 
+pytestmark = pytest.mark.sparse4d
+
+
 @pytest.fixture
 def deployment(tmp_path, monkeypatch):
     """Generate a complete three-frame test deployment without external files."""

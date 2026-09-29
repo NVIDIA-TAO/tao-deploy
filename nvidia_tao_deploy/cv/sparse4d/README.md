@@ -28,6 +28,34 @@ it does not imply that an already-released TAO image includes Sparse4D Deploy.
 `sparse4d` console alias requires TAO Infra's entrypoint registration. Until then,
 use the already-registered `model_agnostic` command or the module form below.
 
+## Why this backend has a dedicated builder and runner
+
+Keeping `build_engine` and `EngineRunner` local to Sparse4D is intentional for
+this initial fixed-profile backend. The shared `EngineBuilder` and
+`TRTInferencer` support multiple inputs, but are not drop-in implementations of
+this deployment contract:
+
+- The export mixes five-dimensional camera images, recurrent feature/anchor
+  tensors and a boolean interval mask. Every input receives its own exact shape
+  and dtype check before output shapes are inferred. The shared builder's generic
+  dynamic-axis resolver handles batch and image height/width, not an arbitrary
+  camera/cache axis; the shared inferencer's explicit `input_shape` override is
+  applied to each input rather than accepting a per-name shape map.
+- The shared inference utility imports `pycuda.autoinit` at module import time.
+  Here, CUDA initialization is deferred until execution so schema discovery,
+  `default_specs` and CPU contract tests work without a GPU context.
+- Building requires a hash-pinned external MSDA plugin, FP32/FP16 conformance
+  probes before the model build, TF32 disabled, strict export-ABI validation and
+  an engine provenance sidecar. Inference validates that provenance and owns
+  named-tensor buffers with explicit context-manager cleanup.
+
+Subclassing remains possible, but would require overriding the profile,
+initialization and execution lifecycle while extending shared code used by
+other models. This PR keeps that change out of scope and reuses the common TAO
+CLI, Hydra configuration and status logging. A future consolidation should
+preserve these contracts and run the same CPU and plugin/GPU regression tests;
+this backend is not intended as a second general-purpose TensorRT framework.
+
 ## Commands
 
 Start from `specs/gen_trt_engine.yaml` and `specs/inference.yaml`. Replace paths,
@@ -46,7 +74,9 @@ python -m nvidia_tao_deploy.cv.sparse4d.entrypoint.sparse4d inference -e /path/t
 Engine generation writes the engine and `<engine>.json`, binding ONNX/engine/
 plugin hashes, TensorRT version, profile and plugin conformance results. Keep the
 sidecar with the engine. Inference refuses changed engines, plugin hashes,
-runtime versions or model settings. Treat engines and plugin libraries as
+runtime versions or model settings. Exact TensorRT version matching includes
+patch/build versions: engines are not built with version compatibility enabled,
+so regenerate the engine after a TensorRT upgrade. Treat engines and plugin libraries as
 trusted executable artifacts, not safe inputs from unknown parties.
 
 ## Prepared frame interface
@@ -120,7 +150,7 @@ DeepStream integration is implied.
 ## Tests
 
 ```bash
-python -m pytest tests/sparse4d -q
+python -m pytest tests/sparse4d -m sparse4d --strict-markers -q
 SPARSE4D_PLUGIN_PATH=/plugins/libmsda.so \
 SPARSE4D_PLUGIN_SHA256=<trusted-library-sha256> \
   python -m pytest tests/sparse4d/test_plugin_gpu.py -q
@@ -128,6 +158,13 @@ SPARSE4D_PLUGIN_SHA256=<trusted-library-sha256> \
 
 CPU tests generate their own arrays, JSON and NPZ fixtures. The opt-in GPU test
 generates its own ONNX probe graph; it needs a supplied compatible plugin but no
-dataset or checkpoint. Full-model validation should additionally compare all
+dataset or checkpoint. All tests carry the registered `sparse4d` marker for
+selection/deselection. Selecting that marker alone does not enable the GPU test:
+it is skipped when `SPARSE4D_PLUGIN_PATH` is unset, and an enabled run also
+requires `SPARSE4D_PLUGIN_SHA256` and a working TensorRT/CUDA environment.
+Status regressions use real ONNX/PyCUDA exception classes without initializing
+CUDA and verify `FAILURE` in `status.json`, preserved causes and success paths.
+The PyCUDA-specific cases skip if the optional driver package is not installed.
+Full-model validation should additionally compare all
 engine outputs with the tao-pytorch **export wrapper on identical inputs**, then
 separately assess native-model accuracy on a representative dataset.

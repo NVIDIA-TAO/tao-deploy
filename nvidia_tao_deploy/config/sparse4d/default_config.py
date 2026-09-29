@@ -50,6 +50,8 @@ class InferenceConfig:
 
     results_dir: str = STR_FIELD("")
     num_gpus: int = INT_FIELD(1, valid_options="1")
+    # LIST_FIELD's factory returns its captured list, sharing mutable defaults.
+    # Keep its UI metadata but allocate a fresh gpu_ids list for each config.
     gpu_ids: List[int] = field(default_factory=lambda: [0], metadata=LIST_FIELD([0]).metadata)
     trt_engine: str = STR_FIELD("")
     manifest: str = STR_FIELD("", description="JSON manifest of prepared, non-pickle NPZ frames.")
