@@ -49,8 +49,7 @@ setuptools.setup(
     keywords=version_locals['__keywords__'],
     packages=setuptools_packages,
     package_data={
-        '': ['*.pyc', "*.yaml", "*.so", '*.pdf'],
-        'nvidia_tao_deploy.cv.sparse4d': ['specs/*.yaml'],
+        '': ['*.pyc', "*.yaml", "*.so", '*.pdf']
     },
     include_package_data=True,
     python_requires=__python_version__,

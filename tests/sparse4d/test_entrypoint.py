@@ -8,6 +8,7 @@ import runpy
 import sys
 
 import pytest
+from setuptools import find_packages
 
 from nvidia_tao_deploy.cv.sparse4d.entrypoint import sparse4d
 
@@ -33,17 +34,19 @@ def test_console_script_registration_and_generated_documentation(command_docs):
     assert command_docs["TARGET"].read_text() == command_docs["desired_content"]()
 
 
-def test_wheel_includes_sparse4d_spec_templates(command_docs):
-    """Non-package specs directories need an explicit package-data glob."""
+def test_spec_templates_use_generic_package_data(command_docs):
+    """Discover the specs package and include YAML with the shared data rule."""
     tree = ast.parse((REPO_ROOT / "setup.py").read_text())
     setup_call = command_docs["_find_setup_call"](tree)
     package_data = ast.literal_eval(next(
         keyword.value for keyword in setup_call.keywords if keyword.arg == "package_data"
     ))
-    package = REPO_ROOT / "nvidia_tao_deploy/cv/sparse4d"
-    patterns = package_data.get("", []) + package_data.get("nvidia_tao_deploy.cv.sparse4d", [])
+    assert "cv.sparse4d.specs" in find_packages(str(REPO_ROOT / "nvidia_tao_deploy"))
+    assert not any(name.startswith("nvidia_tao_deploy.cv.sparse4d") for name in package_data)
+    package = REPO_ROOT / "nvidia_tao_deploy/cv/sparse4d/specs"
+    patterns = package_data.get("", [])
     included = {path.relative_to(package).as_posix() for pattern in patterns for path in package.glob(pattern)}
-    assert {"specs/gen_trt_engine.yaml", "specs/inference.yaml"} <= included
+    assert {"gen_trt_engine.yaml", "inference.yaml"} <= included
 
 
 def test_console_help_discovers_all_actions(monkeypatch, capsys):
