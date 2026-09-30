@@ -24,9 +24,10 @@ it does not imply that an already-released TAO image includes Sparse4D Deploy.
 - These are deployment-only specs; do not pass a full tao-pytorch training spec
   to engine generation or inference.
 
-`setup.py`, dependency files and containers are unchanged. A separately installed
-`sparse4d` console alias requires TAO Infra's entrypoint registration. Until then,
-use the already-registered `model_agnostic` command or the module form below.
+Installing a wheel built from this branch registers the `sparse4d` console
+command and includes the two YAML templates under this package's `specs/` directory.
+The existing `model_agnostic` command and module form remain supported.
+This command registration does not change dependencies or container definitions.
 
 ## Why this backend has a dedicated builder and runner
 
@@ -63,6 +64,10 @@ plugin hash, image dimensions and camera count with your actual inputs. Keep
 model settings identical between build and inference. Use fresh output paths.
 
 ```bash
+sparse4d gen_trt_engine -e /path/to/build.yaml
+sparse4d inference -e /path/to/infer.yaml
+
+# Equivalent through the model-agnostic dispatcher:
 model_agnostic gen_trt_engine -e /path/to/build.yaml
 model_agnostic inference -e /path/to/infer.yaml
 
