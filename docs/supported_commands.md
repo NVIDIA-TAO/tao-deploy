@@ -39,6 +39,7 @@ _Source: `setup.py` console scripts plus each implementation's `scripts/` packag
 | `retinanet` | cv | `nvidia_tao_deploy.cv.retinanet` | evaluate, gen_trt_engine, inference |
 | `rtdetr` | cv | `nvidia_tao_deploy.cv.rtdetr` | evaluate, gen_trt_engine, inference, default_specs |
 | `segformer` | cv | `nvidia_tao_deploy.cv.segformer` | evaluate, gen_trt_engine, inference, default_specs |
+| `sparse4d` | cv | `nvidia_tao_deploy.cv.sparse4d` | gen_trt_engine, inference, default_specs |
 | `ssd` | cv | `nvidia_tao_deploy.cv.ssd` | evaluate, gen_trt_engine, inference |
 | `unet` | cv | `nvidia_tao_deploy.cv.unet` | evaluate, gen_trt_engine, inference |
 | `video_clip` | multimodal | `nvidia_tao_deploy.multimodal.video_clip` | evaluate, gen_trt_engine, inference, default_specs |
