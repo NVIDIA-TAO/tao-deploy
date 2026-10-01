@@ -83,6 +83,7 @@ setuptools.setup(
             'pointpillars=nvidia_tao_deploy.cv.pointpillars.entrypoint.pointpillars:main',
             'retinanet=nvidia_tao_deploy.cv.retinanet.entrypoint.retinanet:main',
             'rtdetr=nvidia_tao_deploy.cv.rtdetr.entrypoint.rtdetr:main',
+            'sparse4d=nvidia_tao_deploy.cv.sparse4d.entrypoint.sparse4d:main',
             'ssd=nvidia_tao_deploy.cv.ssd.entrypoint.ssd:main',
             'segformer=nvidia_tao_deploy.cv.segformer.entrypoint.segformer:main',
             'unet=nvidia_tao_deploy.cv.unet.entrypoint.unet:main',
