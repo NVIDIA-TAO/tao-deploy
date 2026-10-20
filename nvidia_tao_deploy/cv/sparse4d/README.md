@@ -2,14 +2,16 @@
 
 This backend adds `gen_trt_engine` and `inference` to TAO Deploy's existing
 model-agnostic dispatcher. It consumes the **six-stage tao-pytorch Sparse4D
-export ABI**, not a training checkpoint. This is source-branch functionality;
-it does not imply that an already-released TAO image includes Sparse4D Deploy.
+export ABI**, not a training checkpoint. The backend is included in the TAO 7.3
+Deploy image; the MSDA plugin must be built separately for the deployment runtime.
 
 ## Requirements and scope
 
 - TensorRT 10.x, PyCUDA and a compatible NVIDIA GPU/runtime.
 - A trusted, locally installed `nv::MSDA` plugin library built for that runtime.
-  Supply its absolute path and SHA256. No plugin source or binary is bundled.
+  Build the library using the [MSDA source and build instructions](msda_fp16/README.md),
+  then supply its absolute path and SHA256.
+  The container does not bundle a compiled plugin binary.
   Before every model build, generated FP32/FP16 probes check that the registered
   plugin rejects NaN, infinity, zero, one and out-of-bounds sampling coordinates.
   Valid sampling requires **both coordinates strictly inside (0, 1)**. This is
