@@ -98,7 +98,7 @@ class TRTInferencer(BaseInferencer):
             if len(tensor_shape) == 4 or tensor_shape[0] < 0:
                 self.etlt_type = "onnx"
             else:
-                self.etlt_type == "uff"
+                self.etlt_type = "uff"
         else:
             # From TensorRT 10.x only ONNX is supported as a valid model parser.
             self.etlt_type = "onnx"
